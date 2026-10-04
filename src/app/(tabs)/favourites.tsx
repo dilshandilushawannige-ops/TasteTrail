@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#C4693A',
+    color: '#E8505B',
     marginBottom: 8,
   },
   subtext: {

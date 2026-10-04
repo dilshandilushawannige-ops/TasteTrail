@@ -77,7 +77,7 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
   },
   required: {
-    color: '#C4693A',
+    color: '#E8505B',
   },
   inputContainer: {
     marginBottom: 20,
@@ -157,7 +157,7 @@ export const styles = StyleSheet.create({
   stepNumber: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#C4693A',
+    color: '#E8505B',
   },
   removeButton: {
     padding: 4,
@@ -178,7 +178,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFF',
     borderWidth: 2,
-    borderColor: '#C4693A',
+    borderColor: '#E8505B',
     borderStyle: 'dashed',
     borderRadius: 10,
     padding: 16,
@@ -187,7 +187,7 @@ export const styles = StyleSheet.create({
   addStepText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#C4693A',
+    color: '#E8505B',
     marginLeft: 8,
   },
   creditCard: {
@@ -246,8 +246,8 @@ export const styles = StyleSheet.create({
     color: '#333',
   },
   saveButton: {
-    backgroundColor: '#C4693A',
-    borderRadius: 10,
+    backgroundColor: '#E8505B',
+    borderRadius: 30,
     padding: 18,
     alignItems: 'center',
     flexDirection: 'row',
@@ -268,5 +268,52 @@ export const styles = StyleSheet.create({
     color: '#BBB',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  categorySelector: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 10,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryPlaceholderText: {
+    fontSize: 15,
+    color: '#CCC',
+  },
+  categorySelectedText: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '500',
+  },
+  categoryOptions: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 10,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  categoryOptionSelected: {
+    backgroundColor: '#FFF5F5',
+  },
+  categoryOptionText: {
+    fontSize: 15,
+    color: '#333',
+  },
+  categoryOptionTextSelected: {
+    fontSize: 15,
+    color: '#E8505B',
+    fontWeight: '600',
   },
 });

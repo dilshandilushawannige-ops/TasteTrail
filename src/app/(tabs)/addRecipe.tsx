@@ -1,19 +1,19 @@
 import { auth, db } from '@/firebaseConfig';
 import { styles } from '@/styles/addRecipe.styles';
 import { Ionicons } from '@expo/vector-icons';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { useState } from 'react';
+import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 /**
@@ -21,13 +21,49 @@ import {
  * Allows users to add new traditional Sri Lankan recipes to Firestore
  */
 export default function AddRecipeScreen() {
+  const [category, setCategory] = useState('');
   const [recipeName, setRecipeName] = useState('');
   const [ingredients, setIngredients] = useState('');
   const [steps, setSteps] = useState<string[]>(['']);
   const [creditPublicly, setCreditPublicly] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [userName, setUserName] = useState('');
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   const user = auth.currentUser;
+
+  // Available categories
+  const categories = [
+    'Curries & Sambols',
+    'Hoppers & Roti',
+    'Coastal Seafood',
+    'Heritage Specialties',
+    'Village Sweets',
+  ];
+
+  // Fetch user's full name from Firestore
+  useEffect(() => {
+    const fetchUserName = async () => {
+      if (user?.uid) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            console.log('Fetched user data:', userData); // Debug log
+            setUserName(userData.name || user.email || 'Anonymous');
+          } else {
+            console.log('User document does not exist'); // Debug log
+            setUserName(user.email || 'Anonymous');
+          }
+        } catch (error) {
+          console.error('Error fetching user name:', error);
+          setUserName(user.email || 'Anonymous');
+        }
+      }
+    };
+
+    fetchUserName();
+  }, [user]);
 
   /**
    * Add a new empty step to the steps array
@@ -62,6 +98,11 @@ export default function AddRecipeScreen() {
    */
   const handleSaveRecipe = async () => {
     // Validate inputs
+    if (!category) {
+      Alert.alert('Missing Information', 'Please select a category');
+      return;
+    }
+
     if (!recipeName.trim()) {
       Alert.alert('Missing Information', 'Please enter a recipe name');
       return;
@@ -83,12 +124,13 @@ export default function AddRecipeScreen() {
     try {
       // Add recipe to Firestore
       await addDoc(collection(db, 'recipes'), {
+        category,
         name: recipeName.trim(),
         ingredients: ingredients.trim(),
         steps: filledSteps,
         creditPublicly,
         createdBy: user?.uid || null,
-        createdByName: user?.displayName || user?.email || 'Anonymous',
+        createdByName: userName || 'Anonymous',
         createdAt: serverTimestamp(),
         likes: 0,
         saves: 0,
@@ -99,6 +141,7 @@ export default function AddRecipeScreen() {
           text: 'OK',
           onPress: () => {
             // Clear form
+            setCategory('');
             setRecipeName('');
             setIngredients('');
             setSteps(['']);
@@ -151,6 +194,59 @@ export default function AddRecipeScreen() {
           </View>
         </View>
 
+        {/* Category Selector */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>
+            Category <Text style={styles.required}>*</Text>
+          </Text>
+          <TouchableOpacity
+            style={styles.categorySelector}
+            onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+            disabled={loading}
+          >
+            <Text style={category ? styles.categorySelectedText : styles.categoryPlaceholderText}>
+              {category || 'Select a category'}
+            </Text>
+            <Ionicons
+              name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color="#999"
+            />
+          </TouchableOpacity>
+
+          {/* Category Options */}
+          {showCategoryPicker && (
+            <View style={styles.categoryOptions}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.categoryOption,
+                    category === cat && styles.categoryOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setCategory(cat);
+                    setShowCategoryPicker(false);
+                  }}
+                  disabled={loading}
+                >
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      category === cat && styles.categoryOptionTextSelected,
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                  {category === cat && (
+                    <Ionicons name="checkmark-circle" size={20} color="#E8505B" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Recipe Name Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>
@@ -166,7 +262,7 @@ export default function AddRecipeScreen() {
               editable={!loading}
             />
             <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={18} color="#C4693A" />
+              <Ionicons name="mic" size={18} color="#E8505B" />
             </TouchableOpacity>
           </View>
           <Text style={styles.tip}>Tip: You can include the village or region name too.</Text>
@@ -189,7 +285,7 @@ export default function AddRecipeScreen() {
               editable={!loading}
             />
             <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={18} color="#C4693A" />
+              <Ionicons name="mic" size={18} color="#E8505B" />
             </TouchableOpacity>
           </View>
           <View style={styles.infoRow}>
@@ -232,7 +328,7 @@ export default function AddRecipeScreen() {
                   editable={!loading}
                 />
                 <TouchableOpacity style={styles.micButton}>
-                  <Ionicons name="mic" size={18} color="#C4693A" />
+                  <Ionicons name="mic" size={18} color="#E8505B" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -244,7 +340,7 @@ export default function AddRecipeScreen() {
             onPress={addStep}
             disabled={loading}
           >
-            <Ionicons name="add-circle-outline" size={24} color="#C4693A" />
+            <Ionicons name="add-circle-outline" size={24} color="#E8505B" />
             <Text style={styles.addStepText}>Add another step</Text>
           </TouchableOpacity>
 
@@ -267,8 +363,8 @@ export default function AddRecipeScreen() {
           <Switch
             value={creditPublicly}
             onValueChange={setCreditPublicly}
-            trackColor={{ false: '#E5E5E5', true: '#FFB74D' }}
-            thumbColor={creditPublicly ? '#FF9800' : '#f4f3f4'}
+            trackColor={{ false: '#E5E5E5', true: '#E8505B' }}
+            thumbColor={creditPublicly ? '#FFFFFF' : '#f4f3f4'}
             disabled={loading}
           />
         </View>
@@ -278,7 +374,7 @@ export default function AddRecipeScreen() {
           <View style={styles.displayInfo}>
             <Ionicons name="information-circle" size={16} color="#4CAF50" />
             <Text style={styles.displayText}>
-              Will display: <Text style={styles.displayName}>{user?.displayName || user?.email || 'Anonymous'}</Text>
+              Will display: <Text style={styles.displayName}>{userName || 'Loading...'}</Text>
             </Text>
           </View>
         )}

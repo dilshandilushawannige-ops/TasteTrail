@@ -73,7 +73,7 @@ export default function TabLayout() {
       {/* Add Recipe Tab - Elevated circular button */}
       <Tabs.Screen
         name="addRecipe"
-        options={{
+        options={({ navigation }) => ({
           title: '',
           tabBarIcon: ({ focused }) => (
             <View style={styles.addButtonContainer}>
@@ -84,7 +84,17 @@ export default function TabLayout() {
           ),
           headerTitle: 'Add Recipe',
           tabBarLabel: () => null,
-        }}
+          headerLeft: () => (
+            <View style={{ marginLeft: 16 }}>
+              <Ionicons 
+                name="close" 
+                size={28} 
+                color="#333" 
+                onPress={() => navigation.navigate('index')}
+              />
+            </View>
+          ),
+        })}
       />
 
       {/* Favourites Tab */}
@@ -125,7 +135,7 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   addButtonContainer: {
     position: 'absolute',
-    top: -20,
+    top: -30,
     alignItems: 'center',
     justifyContent: 'center',
   },
