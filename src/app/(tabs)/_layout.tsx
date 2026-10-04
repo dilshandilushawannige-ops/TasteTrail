@@ -1,80 +1,103 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { Platform, StyleSheet, View } from 'react-native';
 
 /**
  * Tab layout for the main authenticated app
- * Contains: Home, Map, Add Recipe, Favourites, and Profile tabs
+ * Contains: Home, Discover, Add Recipe (elevated), Favourites, and Profile tabs
  */
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#C4693A', // Brand coral color
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: '#E8505B',
+        tabBarInactiveTintColor: '#A0A0A0',
         tabBarStyle: {
-          backgroundColor: '#FAFAF7',
-          borderTopColor: '#E5E5E5',
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#F0F0F0',
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 85 : 65,
+          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+          paddingTop: 10,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '600',
+          fontWeight: '500',
         },
         headerStyle: {
           backgroundColor: '#FAFAF7',
         },
-        headerTintColor: '#C4693A',
+        headerTintColor: '#E8505B',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
       }}
     >
-      {/* Home Tab - Stack navigator for recipes */}
+      {/* Home Tab */}
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? 'home' : 'home-outline'} 
+              size={24} 
+              color={color} 
+            />
           ),
           headerTitle: 'Taste Trail',
         }}
       />
 
-      {/* Discovery Map Tab */}
+      {/* Discover Tab (Map) */}
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Map',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map" size={size} color={color} />
+          title: 'Discover',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? 'compass' : 'compass-outline'} 
+              size={26} 
+              color={color} 
+            />
           ),
           headerTitle: 'Discover',
         }}
       />
 
-      {/* Add Recipe Tab */}
+      {/* Add Recipe Tab - Elevated circular button */}
       <Tabs.Screen
-        name="add"
+        name="addRecipe"
         options={{
-          title: 'Add',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle" size={size} color={color} />
+          title: '',
+          tabBarIcon: ({ focused }) => (
+            <View style={styles.addButtonContainer}>
+              <View style={[styles.addButton, focused && styles.addButtonFocused]}>
+                <Ionicons name="add" size={32} color="#FFFFFF" />
+              </View>
+            </View>
           ),
           headerTitle: 'Add Recipe',
+          tabBarLabel: () => null,
         }}
       />
 
-      {/* Saved Recipes Tab */}
+      {/* Favourites Tab */}
       <Tabs.Screen
         name="favourites"
         options={{
           title: 'Favourites',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="heart" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? 'bookmark' : 'bookmark-outline'} 
+              size={24} 
+              color={color} 
+            />
           ),
           headerTitle: 'Saved Recipes',
         }}
@@ -85,8 +108,12 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? 'person' : 'person-outline'} 
+              size={24} 
+              color={color} 
+            />
           ),
           headerTitle: 'Profile',
         }}
@@ -94,3 +121,31 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  addButtonContainer: {
+    position: 'absolute',
+    top: -20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E8505B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 5,
+    shadowColor: '#E8505B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+  },
+  addButtonFocused: {
+    transform: [{ scale: 1.05 }],
+    shadowOpacity: 0.4,
+  },
+});
