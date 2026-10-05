@@ -1,6 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+
+import { useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/firebaseConfig';
+
 import {
+  deleteSavedRecipe,
+  restoreSavedRecipe,
+  saveRecipe,
+  updateRecipeNote,
+  watchSavedRecipes,
+} from '@/services/savedRecipes';
+
+import type { SavedRecipe } from '@/services/savedRecipes';
+
+import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
@@ -12,60 +28,6 @@ import {
 
 type RecipeType = 'video' | 'recipe';
 
-type SavedRecipe = {
-  id: string;
-  name: string;
-  creator: string;
-  region: string;
-  type: RecipeType;
-  duration: string;
-  image: string;
-};
-
-// Demo content only.
-// Replace these illustrative photos with your own recipe images later.
-const SAMPLE_RECIPES: SavedRecipe[] = [
-  {
-    id: 'demo-1',
-    name: 'Traditional Fish Ambul Thiyal',
-    creator: 'Amma’s Kitchen',
-    region: 'Southern Province',
-    type: 'video',
-    duration: '25:00',
-    image:
-      'https://images.unsplash.com/photo-1547592180-85f173990554?w=900&auto=format&fit=crop',
-  },
-  {
-    id: 'demo-2',
-    name: 'Creamy Village Parippu',
-    creator: 'Village Kitchen',
-    region: 'Central Province',
-    type: 'video',
-    duration: '18:20',
-    image:
-      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=900&auto=format&fit=crop',
-  },
-  {
-    id: 'demo-3',
-    name: 'Homemade Coconut Roti',
-    creator: 'Nimali’s Kitchen',
-    region: 'Western Province',
-    type: 'recipe',
-    duration: '30 min',
-    image:
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=900&auto=format&fit=crop',
-  },
-  {
-    id: 'demo-4',
-    name: 'Traditional Sri Lankan Chicken Curry',
-    creator: 'Heritage Kitchen',
-    region: 'Southern Province',
-    type: 'recipe',
-    duration: '45 min',
-    image:
-      'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=900&auto=format&fit=crop',
-  },
-];
 
 const COLORS = {
   primary: '#E8505B',
@@ -80,7 +42,7 @@ const COLORS = {
 function RecipePhoto({ uri }: { uri: string }) {
   const [failed, setFailed] = useState(false);
 
-  if (failed) {
+  if (failed || !uri) {
     return (
       <View style={[styles.photo, styles.photoFallback]}>
         <Ionicons
@@ -105,19 +67,79 @@ function RecipePhoto({ uri }: { uri: string }) {
 }
 
 export default function FavouritesScreen() {
-  const [recipes, setRecipes] =
-    useState<SavedRecipe[]>(SAMPLE_RECIPES);
-
+  const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [activeTab, setActiveTab] =
-    useState<RecipeType>('video');
+    useState<RecipeType>('recipe');
 
   const [search, setSearch] = useState('');
   const [sortByName, setSortByName] = useState(false);
 
-  const [lastRemoved, setLastRemoved] = useState<{
-    recipe: SavedRecipe;
-    index: number;
-  } | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+
+  const [busy, setBusy] = useState(false);
+  const actionInProgress = useRef(false);
+
+  const [lastRemoved, setLastRemoved] =
+    useState<SavedRecipe | null>(null);
+
+  // Temporary integration field for saving a real recipe.
+  const [recipeIdInput, setRecipeIdInput] = useState('');
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+
+  useEffect(() => {
+    let stopWatching: (() => void) | undefined;
+    let generation = 0;
+
+    const stopAuth = onAuthStateChanged(auth, (user) => {
+      generation += 1;
+      const currentGeneration = generation;
+
+      stopWatching?.();
+
+      setUserId(user?.uid ?? null);
+      setRecipes([]);
+      setLastRemoved(null);
+      setEditingId(null);
+      setNoteDraft('');
+      setLoadError('');
+
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      stopWatching = watchSavedRecipes(
+        user.uid,
+        (items) => {
+          if (currentGeneration !== generation) return;
+
+          setRecipes(items);
+          setLoading(false);
+          setLoadError('');
+        },
+        (error) => {
+          if (currentGeneration !== generation) return;
+
+          setRecipes([]);
+          setLoading(false);
+          setLoadError(error.message);
+        }
+      );
+    });
+
+    return () => {
+      generation += 1;
+      stopWatching?.();
+      stopAuth();
+    };
+  }, [retryCount]);
 
   const videoCount = recipes.filter(
     (recipe) => recipe.type === 'video'
@@ -129,49 +151,105 @@ export default function FavouritesScreen() {
 
   const query = search.trim().toLowerCase();
 
-  // Search only inside the currently selected tab.
   const visibleRecipes = recipes.filter((recipe) => {
-    const matchesTab = recipe.type === activeTab;
-
     const searchableText =
       `${recipe.name} ${recipe.creator} ${recipe.region}`
         .toLowerCase();
 
-    return matchesTab && searchableText.includes(query);
+    return (
+      recipe.type === activeTab &&
+      searchableText.includes(query)
+    );
   });
 
   if (sortByName) {
-    visibleRecipes.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  function removeRecipe(recipe: SavedRecipe) {
-    const index = recipes.findIndex(
-      (item) => item.id === recipe.id
-    );
-
-    setLastRemoved({ recipe, index });
-
-    setRecipes((current) =>
-      current.filter((item) => item.id !== recipe.id)
+    visibleRecipes.sort((a, b) =>
+      a.name.localeCompare(b.name)
     );
   }
 
-  function undoRemove() {
+  // Prevent repeated taps from starting duplicate operations.
+  async function runAction(
+    action: (uid: string) => Promise<void>
+  ) {
+    if (!userId) {
+      Alert.alert('Sign in required', 'Please sign in first.');
+      return;
+    }
+
+    if (actionInProgress.current) return;
+
+    actionInProgress.current = true;
+    setBusy(true);
+
+    try {
+      await action(userId);
+    } catch (error) {
+      Alert.alert(
+        'Could not complete the action',
+        error instanceof Error
+          ? error.message
+          : 'Please try again.'
+      );
+    } finally {
+      actionInProgress.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function addBookmark() {
+    const recipeId = recipeIdInput.trim();
+
+    if (!recipeId) {
+      Alert.alert('Recipe ID required', 'Enter a recipe ID.');
+      return;
+    }
+
+    await runAction(async (uid) => {
+      await saveRecipe(uid, recipeId);
+      setRecipeIdInput('');
+      setSearch('');
+      setActiveTab('recipe');
+
+      Alert.alert(
+        'Saved',
+        'The recipe is bookmarked. Video recipes appear in the Video tab.'
+      );
+    });
+  }
+
+  async function removeRecipe(recipe: SavedRecipe) {
+    await runAction(async (uid) => {
+      await deleteSavedRecipe(uid, recipe.id);
+      setLastRemoved(recipe);
+
+      if (editingId === recipe.id) {
+        setEditingId(null);
+      }
+    });
+  }
+
+  async function undoRemove() {
     if (!lastRemoved) return;
 
-    const { recipe, index } = lastRemoved;
+    const recipe = lastRemoved;
 
-    setRecipes((current) => {
-      if (current.some((item) => item.id === recipe.id)) {
-        return current;
-      }
-
-      const restored = [...current];
-      restored.splice(Math.min(index, restored.length), 0, recipe);
-      return restored;
+    await runAction(async (uid) => {
+      await restoreSavedRecipe(uid, recipe);
+      setLastRemoved(null);
     });
+  }
 
-    setLastRemoved(null);
+  function editNote(recipe: SavedRecipe) {
+    setEditingId(recipe.id);
+    setNoteDraft(recipe.note);
+  }
+
+  async function saveNote(recipeId: string) {
+    await runAction(async (uid) => {
+      await updateRecipeNote(uid, recipeId, noteDraft);
+      setEditingId(null);
+    });
   }
 
   return (
@@ -188,7 +266,7 @@ export default function FavouritesScreen() {
           </View>
 
           <View style={styles.demoBadge}>
-            <Text style={styles.demoText}>LAYOUT DEMO</Text>
+            <Text style={styles.demoText}>MY COOKBOOK</Text>
           </View>
         </View>
 
@@ -317,6 +395,56 @@ export default function FavouritesScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.integrationBox}>
+          <Text style={styles.integrationTitle}>
+            Development: save an existing recipe
+          </Text>
+
+          <TextInput
+            style={styles.noteInput}
+            placeholder="Paste a Firestore recipe document ID"
+            placeholderTextColor={COLORS.muted}
+            value={recipeIdInput}
+            onChangeText={setRecipeIdInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+            accessibilityLabel="Recipe document ID"
+          />
+
+          <Pressable
+            onPress={addBookmark}
+            disabled={busy || loading || !userId || !!loadError}
+            style={styles.actionButton}
+            accessibilityRole="button"
+          >
+            <Text style={styles.actionButtonText}>
+              {busy ? 'Please wait…' : 'Save recipe'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {loading && (
+          <ActivityIndicator
+            color={COLORS.primary}
+            style={{ marginTop: 14 }}
+          />
+        )}
+
+        {!!loadError && (
+          <View style={styles.integrationBox}>
+            <Text style={styles.errorText}>{loadError}</Text>
+
+            <Pressable
+              onPress={() => setRetryCount((value) => value + 1)}
+              style={styles.emptyAction}
+              accessibilityRole="button"
+            >
+              <Text style={styles.emptyActionText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
         <View style={styles.resultsRow}>
           <Text style={styles.mutedText}>
             {visibleRecipes.length}{' '}
@@ -324,7 +452,7 @@ export default function FavouritesScreen() {
           </Text>
 
           <Text style={styles.mutedText}>
-            {sortByName ? 'Name: A–Z' : 'Saved order'}
+            {sortByName ? 'Name: A–Z' : 'Default order'}
           </Text>
         </View>
       </View>
@@ -357,6 +485,7 @@ export default function FavouritesScreen() {
 
               <Pressable
                 onPress={() => removeRecipe(item)}
+                disabled={busy}
                 style={({ pressed }) => [
                   styles.bookmarkButton,
                   pressed && styles.pressed,
@@ -415,56 +544,128 @@ export default function FavouritesScreen() {
                   <Text style={styles.creatorName}>
                     By {item.creator}
                   </Text>
+
                   <Text style={styles.region}>
                     {item.region}
                   </Text>
                 </View>
               </View>
+
+              {/* Personal note starts here */}
+              {editingId === item.id ? (
+                <View style={styles.noteSection}>
+                  <Text style={styles.integrationTitle}>
+                    Your personal note
+                  </Text>
+
+                  <TextInput
+                    style={styles.noteInput}
+                    value={noteDraft}
+                    onChangeText={setNoteDraft}
+                    placeholder="Example: Use less chilli next time."
+                    placeholderTextColor={COLORS.muted}
+                    multiline
+                    maxLength={500}
+                    editable={!busy}
+                    accessibilityLabel={`Personal note for ${item.name}`}
+                  />
+
+                  <View style={styles.noteActions}>
+                    <Pressable
+                      onPress={() => saveNote(item.id)}
+                      disabled={busy}
+                      style={styles.actionButton}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.actionButtonText}>
+                        {busy ? 'Saving…' : 'Save note'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setEditingId(null)}
+                      disabled={busy}
+                      style={styles.emptyAction}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.emptyActionText}>
+                        Cancel
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.noteSection}>
+                  {!!item.note && (
+                    <Text style={styles.noteText}>
+                      {item.note}
+                    </Text>
+                  )}
+
+                  <Pressable
+                    onPress={() => editNote(item)}
+                    disabled={busy}
+                    style={styles.noteLink}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={17}
+                      color={COLORS.primary}
+                    />
+
+                    <Text style={styles.emptyActionText}>
+                      {item.note
+                        ? 'Edit personal note'
+                        : 'Add personal note'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           </View>
         )}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons
-                name={
-                  query ? 'search-outline' : 'bookmark-outline'
-                }
-                size={34}
-                color={COLORS.primary}
-              />
+          loading || loadError ? null : (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons
+                  name={
+                    query ? 'search-outline' : 'bookmark-outline'
+                  }
+                  size={34}
+                  color={COLORS.primary}
+                />
+              </View>
+
+              <Text style={styles.emptyTitle}>
+                {query
+                  ? 'No matching recipes'
+                  : 'Nothing saved here yet'}
+              </Text>
+
+              <Text style={styles.emptyDescription}>
+                {query
+                  ? 'Try another name, creator, or region.'
+                  : 'Your saved items will appear in this tab.'}
+              </Text>
+
+              {query.length > 0 && (
+                <Pressable
+                  onPress={() => setSearch('')}
+                  style={styles.emptyAction}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.emptyActionText}>
+                    Clear search
+                  </Text>
+                </Pressable>
+              )}
             </View>
-
-            <Text style={styles.emptyTitle}>
-              {query
-                ? 'No matching recipes'
-                : 'Nothing saved here yet'}
-            </Text>
-
-            <Text style={styles.emptyDescription}>
-              {query
-                ? 'Try another name, creator, or region.'
-                : 'Your saved items will appear in this tab.'}
-            </Text>
-
-            {query.length > 0 && (
-              <Pressable
-                onPress={() => setSearch('')}
-                style={styles.emptyAction}
-                accessibilityRole="button"
-              >
-                <Text style={styles.emptyActionText}>
-                  Clear search
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        }
+          )}
         ListFooterComponent={
           <Text style={styles.demoFooter}>
-            Sample content · Video playback and Firebase
-            saving will be connected later.
-          </Text>
+            Your saved recipes and personal notes.          </Text>
         }
       />
 
@@ -479,6 +680,7 @@ export default function FavouritesScreen() {
 
           <Pressable
             onPress={undoRemove}
+            disabled={busy}
             style={styles.undoButton}
             accessibilityRole="button"
             accessibilityLabel="Undo removing the last recipe"
@@ -492,6 +694,73 @@ export default function FavouritesScreen() {
 }
 
 const styles = StyleSheet.create({
+
+  integrationBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F1EC',
+    gap: 10,
+  },
+  integrationTitle: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noteSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 8,
+  },
+  noteInput: {
+    minHeight: 48,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 12,
+    color: COLORS.text,
+    fontSize: 14,
+    textAlignVertical: 'top',
+  },
+  noteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  actionButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  noteText: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  noteLink: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  errorText: {
+    color: '#B42318',
+    fontSize: 13,
+    lineHeight: 20,
+  },
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -675,14 +944,14 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   playOverlay: {
-  position: 'absolute',
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  alignItems: 'center',
-  justifyContent: 'center',
-},
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   playCircle: {
     width: 56,
     height: 56,
