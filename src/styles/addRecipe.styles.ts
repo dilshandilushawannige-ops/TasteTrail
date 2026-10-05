@@ -316,4 +316,43 @@ export const styles = StyleSheet.create({
     color: '#E8505B',
     fontWeight: '600',
   },
+  imagePickerButton: {
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    borderColor: '#E5E5E5',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    overflow: 'hidden',
+    minHeight: 200,
+  },
+  imagePickerPlaceholder: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FAFAF7',
+  },
+  imagePickerText: {
+    marginTop: 12,
+    fontSize: 15,
+    color: '#999',
+    fontWeight: '500',
+  },
+  selectedImage: {
+    width: '100%',
+    height: 200,
+    resizeMode: 'cover',
+  },
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    padding: 8,
+  },
+  removeImageText: {
+    fontSize: 14,
+    color: '#FF5252',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
 });

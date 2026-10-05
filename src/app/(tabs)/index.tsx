@@ -3,13 +3,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface Recipe {
@@ -18,6 +19,7 @@ interface Recipe {
   name: string;
   ingredients: string;
   steps: string[];
+  imageUrl?: string;
   createdByName: string;
   createdAt: any;
   likes: number;
@@ -79,9 +81,13 @@ export default function HomeScreen() {
 
   const renderRecipeCard = ({ item }: { item: Recipe }) => (
     <TouchableOpacity style={styles.recipeCard}>
-      <View style={styles.recipeImagePlaceholder}>
-        <Ionicons name="restaurant" size={48} color="#E8505B" />
-      </View>
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={styles.recipeImage} />
+      ) : (
+        <View style={styles.recipeImagePlaceholder}>
+          <Ionicons name="restaurant" size={48} color="#E8505B" />
+        </View>
+      )}
       
       <View style={styles.recipeContent}>
         {item.category && (
@@ -220,6 +226,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F5',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  recipeImage: {
+    width: '100%',
+    height: 180,
+    resizeMode: 'cover',
   },
   recipeContent: {
     padding: 12,
