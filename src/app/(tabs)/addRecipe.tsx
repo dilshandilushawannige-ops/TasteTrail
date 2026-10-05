@@ -1,11 +1,13 @@
 import { auth, db } from '@/firebaseConfig';
 import { styles } from '@/styles/addRecipe.styles';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -29,8 +31,14 @@ export default function AddRecipeScreen() {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const user = auth.currentUser;
+
+  // Cloudinary configuration - Replace with your actual Cloudinary details
+  const CLOUDINARY_CLOUD_NAME = 'dknhx6ap7'; // Replace this
+  const CLOUDINARY_UPLOAD_PRESET = 'taste_trail_recipes'; // Replace this
 
   // Available categories
   const categories = [
@@ -64,6 +72,83 @@ export default function AddRecipeScreen() {
 
     fetchUserName();
   }, [user]);
+
+  /**
+   * Pick image from device gallery
+   */
+  const pickImage = async () => {
+    // Request permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need camera roll permissions to select an image.');
+      return;
+    }
+
+    // Launch image picker
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  /**
+   * Upload image to Cloudinary
+   * Uses XMLHttpRequest instead of fetch because React Native's fetch on Hermes
+   * does not support the { uri, type, name } FormData blob part (throws
+   * "Unsupported FormDataPart implementation"). XHR uses the native layer which
+   * correctly serializes the blob.
+   */
+  const uploadImageToCloudinary = async (uri: string): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+
+      const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
+      const fileName = `recipe_${Date.now()}.${fileExtension}`;
+
+      const formData: any = new FormData();
+      formData.append('file', { uri, type: mimeType, name: fileName } as any);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+      // Use XHR — RN's native XHR correctly handles the blob FormData part
+      const secureUrl = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(
+          'POST',
+          `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`
+        );
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const data = JSON.parse(xhr.responseText);
+            if (data.secure_url) {
+              resolve(data.secure_url);
+            } else {
+              reject(new Error(data.error?.message || 'No secure_url in Cloudinary response'));
+            }
+          } else {
+            reject(new Error(`Cloudinary upload failed with status ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error during Cloudinary upload'));
+        xhr.send(formData);
+      });
+
+      return secureUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Upload Failed', 'Failed to upload image. Please check your Cloudinary settings and try again.');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   /**
    * Add a new empty step to the steps array
@@ -122,12 +207,23 @@ export default function AddRecipeScreen() {
     setLoading(true);
 
     try {
+      // Upload image to Cloudinary if selected
+      let imageUrl = null;
+      if (imageUri) {
+        imageUrl = await uploadImageToCloudinary(imageUri);
+        if (!imageUrl) {
+          setLoading(false);
+          return; // Stop if image upload failed
+        }
+      }
+
       // Add recipe to Firestore
       await addDoc(collection(db, 'recipes'), {
         category,
         name: recipeName.trim(),
         ingredients: ingredients.trim(),
         steps: filledSteps,
+        imageUrl,
         creditPublicly,
         createdBy: user?.uid || null,
         createdByName: userName || 'Anonymous',
@@ -145,6 +241,7 @@ export default function AddRecipeScreen() {
             setRecipeName('');
             setIngredients('');
             setSteps(['']);
+            setImageUri(null);
             setCreditPublicly(true);
           },
         },
@@ -347,6 +444,35 @@ export default function AddRecipeScreen() {
           <Text style={styles.tip}>
             Describe it like you're teaching your grandchild at the stove.
           </Text>
+        </View>
+
+        {/* Image Picker */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Recipe Photo</Text>
+          <TouchableOpacity
+            style={styles.imagePickerButton}
+            onPress={pickImage}
+            disabled={loading || uploadingImage}
+          >
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.selectedImage} />
+            ) : (
+              <View style={styles.imagePickerPlaceholder}>
+                <Ionicons name="camera" size={40} color="#E8505B" />
+                <Text style={styles.imagePickerText}>Add a photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {imageUri && (
+            <TouchableOpacity
+              style={styles.removeImageButton}
+              onPress={() => setImageUri(null)}
+              disabled={loading || uploadingImage}
+            >
+              <Ionicons name="close-circle" size={20} color="#FF5252" />
+              <Text style={styles.removeImageText}>Remove photo</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Credit Publicly Option */}
