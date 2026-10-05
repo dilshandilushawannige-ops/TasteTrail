@@ -8,7 +8,7 @@ export default function FavouritesScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.text}>Saved Recipes</Text>
-      <Text style={styles.subtext}>Coming soon...</Text>
+      <Text style={styles.subtext}>Your personal culinary treasury</Text>
     </View>
   );
 }
