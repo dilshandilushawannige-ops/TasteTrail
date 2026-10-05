@@ -50,7 +50,7 @@ export default function RootLayout() {
   if (initializing) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAFAF7' }}>
-        <ActivityIndicator size="large" color="#C4693A" />
+        <ActivityIndicator size="large" color="#E8505B" />
       </View>
     );
   }

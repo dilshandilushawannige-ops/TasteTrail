@@ -2,16 +2,16 @@ import { router } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth } from '../firebaseConfig';
 
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#C4693A',
+    color: '#E8505B',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   button: {
-    backgroundColor: '#C4693A',
+    backgroundColor: '#E8505B',
     borderRadius: 10,
     padding: 16,
     alignItems: 'center',
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   link: {
     fontSize: 15,
-    color: '#C4693A',
+    color: '#E8505B',
     fontWeight: '600',
   },
 });
