@@ -116,7 +116,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
     });
   }
 
-  function stopVoice() { void Speech.stop().catch((failure) => setError(message(failure))); }
+  function stopVoice() { void Speech.stop().catch((failure: any) => setError(message(failure))); }
 
   async function readAloud() {
     if (!recipe) return;
