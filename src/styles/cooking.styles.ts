@@ -187,4 +187,43 @@ export const cookingStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+
+  // ── Recipe photo ────────────────────────────────────────────────────────────
+
+  recipeImageWrapper: {
+    // Sits between the recipe title and the ingredient/steps tabs.
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#F0EFEA', // neutral cream — visible while loading
+    // Enforce a 4:3 aspect ratio that works on all screen widths.
+    aspectRatio: 4 / 3,
+    width: '100%',
+  },
+
+  recipeImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  recipeImagePlaceholder: {
+    // Shown while the image is loading or when no imageUrl is available.
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#F0EFEA',
+  },
+
+  recipeImagePlaceholderIcon: {
+    // The coral restaurant icon inside the placeholder.
+    opacity: 0.45,
+  },
+
+  recipeImagePlaceholderText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
 });
