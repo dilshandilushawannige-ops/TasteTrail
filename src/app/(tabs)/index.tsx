@@ -2,6 +2,7 @@ import { db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
 import {
     ActivityIndicator,
     FlatList,
@@ -43,7 +44,7 @@ export default function HomeScreen() {
         orderBy('createdAt', 'desc')
       );
       const querySnapshot = await getDocs(recipesQuery);
-      
+
       const fetchedRecipes: Recipe[] = [];
       querySnapshot.forEach((doc) => {
         fetchedRecipes.push({
@@ -51,7 +52,7 @@ export default function HomeScreen() {
           ...doc.data(),
         } as Recipe);
       });
-      
+
       setRecipes(fetchedRecipes);
     } catch (error) {
       console.error('Error fetching recipes:', error);
@@ -64,12 +65,12 @@ export default function HomeScreen() {
   // Load recipes on mount and set up auto-refresh
   useEffect(() => {
     fetchRecipes();
-    
+
     // Set up interval to refresh every 5 seconds when app is active
     const interval = setInterval(() => {
       fetchRecipes();
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -80,26 +81,32 @@ export default function HomeScreen() {
   };
 
   const renderRecipeCard = ({ item }: { item: Recipe }) => (
-    <TouchableOpacity style={styles.recipeCard}>
-      {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.recipeImage} />
-      ) : (
-        <View style={styles.recipeImagePlaceholder}>
-          <Ionicons name="restaurant" size={48} color="#E8505B" />
-        </View>
-      )}
-      
+    <TouchableOpacity
+      style={styles.recipeCard}
+      accessibilityRole="button"
+      accessibilityLabel={`Cook ${item.name}`}
+      onPress={() =>
+        router.push({
+          pathname: '/cooking',
+          params: { recipeId: item.id },
+        })
+      }
+    >
+      <View style={styles.recipeImagePlaceholder}>
+        <Ionicons name="restaurant" size={48} color="#E8505B" />
+      </View>
+
       <View style={styles.recipeContent}>
         {item.category && (
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryBadgeText}>{item.category}</Text>
           </View>
         )}
-        
+
         <Text style={styles.recipeTitle} numberOfLines={2}>
           {item.name}
         </Text>
-        
+
         <Text style={styles.recipeIngredients} numberOfLines={2}>
           {item.ingredients}
         </Text>
@@ -109,7 +116,7 @@ export default function HomeScreen() {
             <Ionicons name="person-circle-outline" size={16} color="#999" />
             <Text style={styles.authorText}>{item.createdByName}</Text>
           </View>
-          
+
           <View style={styles.statsContainer}>
             <View style={styles.stat}>
               <Ionicons name="heart-outline" size={16} color="#999" />
