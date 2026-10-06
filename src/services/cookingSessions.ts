@@ -12,6 +12,8 @@ export type CookingRecipe = {
   name: string;
   ingredients: string;
   steps: string[];
+  /** Cloudinary (or other) URL for the recipe photo. Optional — older records omit it. */
+  imageUrl?: string;
 };
 
 export type CookingSession = {
@@ -68,6 +70,14 @@ function parseRecipe(
     );
   }
 
+  // Accept imageUrl only when it is a non-empty string (Cloudinary URL).
+  // null, undefined, empty-string, and other types are silently dropped so
+  // that older records and sessions without a photo remain fully compatible.
+  const imageUrl =
+    typeof data.imageUrl === 'string' && data.imageUrl.trim()
+      ? data.imageUrl.trim()
+      : undefined;
+
   return {
     id,
     name:
@@ -79,6 +89,7 @@ function parseRecipe(
         ? data.ingredients
         : '',
     steps: data.steps as string[],
+    ...(imageUrl !== undefined ? { imageUrl } : {}),
   };
 }
 
@@ -178,6 +189,22 @@ export async function loadCooking(
   };
 }
 
+// Serialize a CookingRecipe for Firestore, omitting undefined fields.
+// Firestore does not accept `undefined` values; use this helper before any write.
+function recipeToFirestore(recipe: CookingRecipe): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    id: recipe.id,
+    name: recipe.name,
+    ingredients: recipe.ingredients,
+    steps: recipe.steps,
+  };
+  // Only include imageUrl when it has an actual value to avoid writing undefined.
+  if (recipe.imageUrl !== undefined) {
+    base.imageUrl = recipe.imageUrl;
+  }
+  return base;
+}
+
 // CREATE: start a session, or return the existing session.
 export async function startCooking(
   userId: string,
@@ -202,14 +229,33 @@ export async function startCooking(
       version: 1,
     };
 
+    // Build the Firestore document without any `undefined` values.
     transaction.set(target, {
       ...session,
+      recipe: recipeToFirestore(recipe),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
     return session;
   });
+}
+
+// OPTIONAL PHOTO FETCH: try to load only the imageUrl for an existing session
+// whose saved snapshot pre-dates photo support. Failures are silently swallowed
+// — a missing photo must never prevent an existing session from resuming.
+export async function fetchRecipeImageUrl(
+  recipeId: string
+): Promise<string | undefined> {
+  try {
+    const snap = await getDocFromServer(doc(db, 'recipes', recipeId));
+    if (!snap.exists()) return undefined;
+    const raw = snap.data().imageUrl;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+  } catch {
+    // Network failure, permission denial, etc. — non-fatal.
+    return undefined;
+  }
 }
 
 // UPDATE: save progress and timer changes.
@@ -249,6 +295,7 @@ export async function updateCooking(
 
     transaction.update(target, {
       ...next,
+      recipe: recipeToFirestore(next.recipe),
       updatedAt: serverTimestamp(),
     });
 
