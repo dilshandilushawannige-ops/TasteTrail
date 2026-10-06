@@ -301,12 +301,12 @@ export default function AdminRestaurantsScreen() {
 
         {/* Manage Restaurants Panel */}
         <View style={styles.managePanel}>
-          <View style={styles.managePanelContent}>
+          <View style={styles.managePanelLeft}>
             <View style={styles.managePanelIcon}>
-              <Ionicons name="storefront" size={24} color="#E8505B" />
+              <Ionicons name="storefront" size={20} color="#E8505B" />
             </View>
             <View style={styles.managePanelText}>
-              <Text style={styles.managePanelTitle}>Manage Restaurants</Text>
+              <Text style={styles.managePanelTitle}>Manage{'\n'}Restaurants</Text>
               <Text style={styles.managePanelSubtitle}>Sri Lankan Culinary Network</Text>
             </View>
           </View>
@@ -315,8 +315,8 @@ export default function AdminRestaurantsScreen() {
             onPress={handleAddRestaurant}
             style={styles.addRestaurantButton}
           >
-            <Ionicons name="add" size={18} color="#FFF" />
-            <Text style={styles.addRestaurantText}>Add Restaurant</Text>
+            <Ionicons name="add" size={16} color="#FFF" />
+            <Text style={styles.addRestaurantText}>Add{'\n'}Restaurant</Text>
           </TouchableOpacity>
         </View>
 
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 24,
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -490,47 +490,54 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: 80,
   },
-  managePanelContent: {
+  managePanelLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
   managePanelIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#FFF5F5',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   managePanelText: {
     flex: 1,
   },
   managePanelTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    lineHeight: 20,
+    marginBottom: 2,
   },
   managePanelSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
+    lineHeight: 14,
   },
   addRestaurantButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8505B',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minWidth: 80,
+    justifyContent: 'center',
   },
   addRestaurantText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginLeft: 4,
   },
   sectionHeader: {
     paddingHorizontal: 20,
