@@ -66,7 +66,7 @@ export default function AdminTabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Restaurants',
+          headerShown: false, // Using custom header in the screen
         }}
       />
 
