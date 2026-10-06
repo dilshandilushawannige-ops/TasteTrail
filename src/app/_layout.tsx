@@ -93,6 +93,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
     const inAdminGroup = segments[0] === 'admin';
     const inTabsGroup = segments[0] === '(tabs)';
+    const inAllowedRoute = segments[0] === 'cooking' || segments[0] === 'explore' || inTabsGroup;
 
     if (!user && !inAuthGroup) {
       // User is not logged in and not on auth screens, redirect to login
@@ -110,8 +111,8 @@ export default function RootLayout() {
     } else if (user && !isAdmin && inAdminGroup) {
       // Non-admin user trying to access admin area, redirect to tabs
       router.replace('/(tabs)');
-    } else if (user && !isAdmin && !inTabsGroup && !inAuthGroup) {
-      // Regular user not in tabs area, redirect to tabs
+    } else if (user && !isAdmin && !inAllowedRoute && !inAuthGroup) {
+      // Regular user not in allowed routes, redirect to tabs
       router.replace('/(tabs)');
     }
   }, [user, segments, initializing, isAdmin, claimsLoading]);
