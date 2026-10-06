@@ -4,13 +4,14 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface Recipe {
@@ -19,6 +20,7 @@ interface Recipe {
   name: string;
   ingredients: string;
   steps: string[];
+  imageUrl?: string;
   createdByName: string;
   createdAt: any;
   likes: number;
@@ -231,6 +233,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F5',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  recipeImage: {
+    width: '100%',
+    height: 180,
+    resizeMode: 'cover',
   },
   recipeContent: {
     padding: 12,
