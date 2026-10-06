@@ -8,7 +8,11 @@
     "scheme": "tastetrail",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow TasteTrail to use speech recognition to transcribe your recipes.",
+        "NSMicrophoneUsageDescription": "Allow TasteTrail to use the microphone for voice recipe entry."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,11 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.dilshan2001.TasteTrail"
     },
     "web": {
       "output": "static",
@@ -31,6 +39,16 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow TasteTrail to use the microphone for voice recipe entry.",
+          "speechRecognitionPermission": "Allow TasteTrail to use speech recognition to transcribe your recipes.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
     ],

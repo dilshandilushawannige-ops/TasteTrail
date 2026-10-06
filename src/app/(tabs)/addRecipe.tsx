@@ -1,6 +1,7 @@
 import { auth, db } from '@/firebaseConfig';
 import { styles } from '@/styles/addRecipe.styles';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
@@ -57,10 +58,10 @@ export default function AddRecipeScreen() {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            console.log('Fetched user data:', userData); // Debug log
+            console.log('Fetched user data:', userData);
             setUserName(userData.name || user.email || 'Anonymous');
           } else {
-            console.log('User document does not exist'); // Debug log
+            console.log('User document does not exist');
             setUserName(user.email || 'Anonymous');
           }
         } catch (error) {
@@ -77,15 +78,13 @@ export default function AddRecipeScreen() {
    * Pick image from device gallery
    */
   const pickImage = async () => {
-    // Request permission
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status} = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
       Alert.alert('Permission Denied', 'We need camera roll permissions to select an image.');
       return;
     }
 
-    // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -99,48 +98,42 @@ export default function AddRecipeScreen() {
   };
 
   /**
-   * Upload image to Cloudinary
-   * Uses XMLHttpRequest instead of fetch because React Native's fetch on Hermes
-   * does not support the { uri, type, name } FormData blob part (throws
-   * "Unsupported FormDataPart implementation"). XHR uses the native layer which
-   * correctly serializes the blob.
+   * Upload image to Cloudinary using base64 encoding
    */
   const uploadImageToCloudinary = async (uri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
 
-      const fileExtension = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const mimeType = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`;
-      const fileName = `recipe_${Date.now()}.${fileExtension}`;
-
-      const formData: any = new FormData();
-      formData.append('file', { uri, type: mimeType, name: fileName } as any);
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-      // Use XHR — RN's native XHR correctly handles the blob FormData part
-      const secureUrl = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open(
-          'POST',
-          `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`
-        );
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const data = JSON.parse(xhr.responseText);
-            if (data.secure_url) {
-              resolve(data.secure_url);
-            } else {
-              reject(new Error(data.error?.message || 'No secure_url in Cloudinary response'));
-            }
-          } else {
-            reject(new Error(`Cloudinary upload failed with status ${xhr.status}`));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error during Cloudinary upload'));
-        xhr.send(formData);
+      // Read file as base64
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
 
-      return secureUrl;
+      // Prepare the data URL format required by Cloudinary
+      const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+      // Upload to Cloudinary
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            file: dataUrl,
+            upload_preset: CLOUDINARY_UPLOAD_PRESET,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.secure_url) {
+        return data.secure_url;
+      } else {
+        throw new Error(data.error?.message || 'Failed to get image URL from Cloudinary');
+      }
     } catch (error) {
       console.error('Error uploading image:', error);
       Alert.alert('Upload Failed', 'Failed to upload image. Please check your Cloudinary settings and try again.');
@@ -182,7 +175,6 @@ export default function AddRecipeScreen() {
    * Validate and save recipe to Firestore
    */
   const handleSaveRecipe = async () => {
-    // Validate inputs
     if (!category) {
       Alert.alert('Missing Information', 'Please select a category');
       return;
@@ -207,17 +199,15 @@ export default function AddRecipeScreen() {
     setLoading(true);
 
     try {
-      // Upload image to Cloudinary if selected
       let imageUrl = null;
       if (imageUri) {
         imageUrl = await uploadImageToCloudinary(imageUri);
         if (!imageUrl) {
           setLoading(false);
-          return; // Stop if image upload failed
+          return;
         }
       }
 
-      // Add recipe to Firestore
       await addDoc(collection(db, 'recipes'), {
         category,
         name: recipeName.trim(),
@@ -236,7 +226,6 @@ export default function AddRecipeScreen() {
         {
           text: 'OK',
           onPress: () => {
-            // Clear form
             setCategory('');
             setRecipeName('');
             setIngredients('');
@@ -264,7 +253,6 @@ export default function AddRecipeScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Preserve your family recipes</Text>
           <Text style={styles.subtitle}>
@@ -272,7 +260,6 @@ export default function AddRecipeScreen() {
           </Text>
         </View>
 
-        {/* Voice Feature Card */}
         <View style={styles.voiceCard}>
           <View style={styles.voiceIconContainer}>
             <Ionicons name="mic" size={20} color="#4CAF50" />
@@ -285,13 +272,12 @@ export default function AddRecipeScreen() {
               </View>
             </View>
             <Text style={styles.voiceDescription}>
-              Can't type easily? Simply speak in Sinhala, Tamil, or English and we'll write it
+              Can&apos;t type easily? Simply speak in Sinhala, Tamil, or English and we&apos;ll write it
               down for you.
             </Text>
           </View>
         </View>
 
-        {/* Category Selector */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>
             Category <Text style={styles.required}>*</Text>
@@ -311,7 +297,6 @@ export default function AddRecipeScreen() {
             />
           </TouchableOpacity>
 
-          {/* Category Options */}
           {showCategoryPicker && (
             <View style={styles.categoryOptions}>
               {categories.map((cat) => (
@@ -344,7 +329,6 @@ export default function AddRecipeScreen() {
           )}
         </View>
 
-        {/* Recipe Name Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>
             Recipe name <Text style={styles.required}>*</Text>
@@ -365,7 +349,6 @@ export default function AddRecipeScreen() {
           <Text style={styles.tip}>Tip: You can include the village or region name too.</Text>
         </View>
 
-        {/* Ingredients Input */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>
             Ingredients <Text style={styles.required}>*</Text>
@@ -393,7 +376,6 @@ export default function AddRecipeScreen() {
           </View>
         </View>
 
-        {/* Steps Input - Multiple Dynamic Steps */}
         <View style={styles.stepsContainer}>
           <Text style={styles.label}>
             Steps <Text style={styles.required}>*</Text>
@@ -431,7 +413,6 @@ export default function AddRecipeScreen() {
             </View>
           ))}
 
-          {/* Add Step Button */}
           <TouchableOpacity
             style={styles.addStepButton}
             onPress={addStep}
@@ -442,11 +423,10 @@ export default function AddRecipeScreen() {
           </TouchableOpacity>
 
           <Text style={styles.tip}>
-            Describe it like you're teaching your grandchild at the stove.
+            Describe it like you&apos;re teaching your grandchild at the stove.
           </Text>
         </View>
 
-        {/* Image Picker */}
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Recipe Photo</Text>
           <TouchableOpacity
@@ -475,7 +455,6 @@ export default function AddRecipeScreen() {
           )}
         </View>
 
-        {/* Credit Publicly Option */}
         <View style={styles.creditCard}>
           <View style={styles.creditLeft}>
             <View style={styles.creditIconContainer}>
@@ -495,7 +474,6 @@ export default function AddRecipeScreen() {
           />
         </View>
 
-        {/* Display Name Info */}
         {creditPublicly && (
           <View style={styles.displayInfo}>
             <Ionicons name="information-circle" size={16} color="#4CAF50" />
@@ -505,7 +483,6 @@ export default function AddRecipeScreen() {
           </View>
         )}
 
-        {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSaveRecipe}
