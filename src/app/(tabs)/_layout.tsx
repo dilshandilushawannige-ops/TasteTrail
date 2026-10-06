@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Tabs, router } from 'expo-router';
+import { Image, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 /**
  * Tab layout for the main authenticated app
@@ -30,12 +30,39 @@ export default function TabLayout() {
           fontWeight: '500',
         },
         headerStyle: {
-          backgroundColor: '#FAFAF7',
+          backgroundColor: '#FFFFFF',
+          elevation: 2,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
         },
         headerTintColor: '#E8505B',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        headerLeft: () => (
+          <View style={styles.headerLeft}>
+            <Image 
+              source={require('@/assets/images/logo.png')} 
+              style={styles.logo} 
+              resizeMode="contain" 
+            />
+          </View>
+        ),
+        headerRight: () => (
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="notifications-outline" size={24} color="#333" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.profileButton}
+              onPress={() => router.push('/(tabs)/profile')}
+            >
+              <Ionicons name="person-circle" size={32} color="#E8505B" />
+            </TouchableOpacity>
+          </View>
+        ),
       }}
     >
       {/* Home Tab */}
@@ -50,7 +77,7 @@ export default function TabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Taste Trail',
+          headerTitle: '',
         }}
       />
 
@@ -66,7 +93,7 @@ export default function TabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Discover',
+          headerTitle: '',
         }}
       />
 
@@ -94,6 +121,7 @@ export default function TabLayout() {
               />
             </View>
           ),
+          headerRight: () => null,
         })}
       />
 
@@ -109,7 +137,7 @@ export default function TabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Saved Recipes',
+          headerTitle: '',
         }}
       />
 
@@ -125,7 +153,8 @@ export default function TabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Profile',
+          headerTitle: '',
+          headerRight: () => null,
         }}
       />
     </Tabs>
@@ -133,6 +162,25 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  headerLeft: {
+    marginLeft: -17,
+  },
+  logo: {
+    width: 180,
+    height: 140,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginRight: 16,
+  },
+  iconButton: {
+    padding: 4,
+  },
+  profileButton: {
+    padding: 0,
+  },
   addButtonContainer: {
     position: 'absolute',
     top: -30,

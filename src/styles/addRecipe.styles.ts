@@ -355,4 +355,148 @@ export const styles = StyleSheet.create({
     marginLeft: 6,
     fontWeight: '500',
   },
+
+  // ── Voice Listening Modal ────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#FAFAF7',
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  // Badge
+  modalBadgeRow: {
+    marginBottom: 20,
+  },
+  modalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  modalBadgeActive: {
+    backgroundColor: '#E8F5E9',
+  },
+  modalBadgeIdle: {
+    backgroundColor: '#FFF3E0',
+  },
+  modalBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  modalBadgeDotActive: {
+    backgroundColor: '#4CAF50',
+  },
+  modalBadgeDotIdle: {
+    backgroundColor: '#FF9800',
+  },
+  modalBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#444',
+  },
+  // Mic
+  modalMicWrapper: {
+    width: 96,
+    height: 96,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalMicRing: {
+    position: 'absolute',
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#E8505B',
+    opacity: 0.25,
+  },
+  modalMicCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#E8505B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Transcript
+  modalTranscriptBox: {
+    width: '100%',
+    minHeight: 100,
+    maxHeight: 180,
+    backgroundColor: '#F5F5F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    justifyContent: 'center',
+  },
+  modalTranscriptScroll: {
+    flex: 1,
+  },
+  modalTranscriptText: {
+    fontSize: 16,
+    color: '#222',
+    lineHeight: 24,
+  },
+  modalTranscriptPlaceholder: {
+    fontSize: 14,
+    color: '#AAA',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  // Buttons
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EFEFEF',
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#555',
+  },
+  modalDoneButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#E8505B',
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  modalDoneButtonDisabled: {
+    opacity: 0.45,
+  },
+  modalDoneText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
 });

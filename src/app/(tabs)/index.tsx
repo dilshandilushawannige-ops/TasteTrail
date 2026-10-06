@@ -1,16 +1,19 @@
-import { db } from '@/firebaseConfig';
+import { auth, db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { router } from 'expo-router';
+import { collection, deleteDoc, doc, getDocs, orderBy, query, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface Recipe {
@@ -21,38 +24,67 @@ interface Recipe {
   steps: string[];
   imageUrl?: string;
   createdByName: string;
+  createdBy?: string;
   createdAt: any;
   likes: number;
   saves: number;
 }
 
-/**
- * Home Screen - Main feed of traditional Sri Lankan recipes
- * Displays all recipes saved by users from Firestore
- */
+interface Creator {
+  uid: string;
+  name: string;
+  email: string;
+}
+
+const categories = [
+  { id: 'all', name: 'All' },
+  { id: 'curries', name: 'Curries & Sambols' },
+  { id: 'hoppers', name: 'Hoppers & Roti' },
+  { id: 'coastal', name: 'Coastal Seafood' },
+  { id: 'heritage', name: 'Heritage Specialties' },
+  { id: 'sweets', name: 'Village Sweets' },
+];
+
 export default function HomeScreen() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [bookmarkedRecipes, setBookmarkedRecipes] = useState<Set<string>>(new Set());
 
-  // Fetch recipes from Firestore
+  const user = auth.currentUser;
+
   const fetchRecipes = async () => {
     try {
-      const recipesQuery = query(
-        collection(db, 'recipes'),
-        orderBy('createdAt', 'desc')
-      );
+      const recipesQuery = query(collection(db, 'recipes'), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(recipesQuery);
-      
+
       const fetchedRecipes: Recipe[] = [];
       querySnapshot.forEach((doc) => {
-        fetchedRecipes.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Recipe);
+        fetchedRecipes.push({ id: doc.id, ...doc.data() } as Recipe);
       });
-      
+
       setRecipes(fetchedRecipes);
+
+      // Get unique creators
+      const uniqueCreators = new Map<string, Creator>();
+      fetchedRecipes.forEach((recipe) => {
+        if (recipe.createdBy && !uniqueCreators.has(recipe.createdBy)) {
+          uniqueCreators.set(recipe.createdBy, {
+            uid: recipe.createdBy,
+            name: recipe.createdByName,
+            email: '',
+          });
+        }
+      });
+      setCreators(Array.from(uniqueCreators.values()).slice(0, 5));
+
+      // Fetch user's bookmarked recipes
+      if (user) {
+        await fetchBookmarks();
+      }
     } catch (error) {
       console.error('Error fetching recipes:', error);
     } finally {
@@ -61,112 +93,334 @@ export default function HomeScreen() {
     }
   };
 
-  // Load recipes on mount and set up auto-refresh
+  const fetchBookmarks = async () => {
+    if (!user) return;
+    
+    try {
+      const bookmarksQuery = query(collection(db, 'users', user.uid, 'favourites'));
+      const querySnapshot = await getDocs(bookmarksQuery);
+      
+      const bookmarked = new Set<string>();
+      querySnapshot.forEach((doc) => {
+        bookmarked.add(doc.id);
+      });
+      setBookmarkedRecipes(bookmarked);
+    } catch (error) {
+      console.error('Error fetching bookmarks:', error);
+    }
+  };
+
+  const toggleBookmark = async (recipeId: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to save recipes to favorites');
+      return;
+    }
+
+    try {
+      const bookmarkRef = doc(db, 'users', user.uid, 'favourites', recipeId);
+      
+      if (bookmarkedRecipes.has(recipeId)) {
+        // Remove from favorites
+        await deleteDoc(bookmarkRef);
+        setBookmarkedRecipes((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(recipeId);
+          return newSet;
+        });
+      } else {
+        // Add to favorites
+        const recipe = recipes.find((r) => r.id === recipeId);
+        if (recipe) {
+          await setDoc(bookmarkRef, {
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            recipeImage: recipe.imageUrl || null,
+            savedAt: new Date(),
+          });
+          setBookmarkedRecipes((prev) => new Set(prev).add(recipeId));
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      Alert.alert('Error', 'Failed to update favorites');
+    }
+  };
+
   useEffect(() => {
     fetchRecipes();
-    
-    // Set up interval to refresh every 5 seconds when app is active
-    const interval = setInterval(() => {
-      fetchRecipes();
-    }, 5000);
-    
-    return () => clearInterval(interval);
   }, []);
 
-  // Pull to refresh
   const onRefresh = () => {
     setRefreshing(true);
     fetchRecipes();
   };
 
-  const renderRecipeCard = ({ item }: { item: Recipe }) => (
-    <TouchableOpacity style={styles.recipeCard}>
-      {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.recipeImage} />
-      ) : (
-        <View style={styles.recipeImagePlaceholder}>
-          <Ionicons name="restaurant" size={48} color="#E8505B" />
-        </View>
-      )}
-      
-      <View style={styles.recipeContent}>
-        {item.category && (
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>{item.category}</Text>
-          </View>
-        )}
-        
-        <Text style={styles.recipeTitle} numberOfLines={2}>
-          {item.name}
-        </Text>
-        
-        <Text style={styles.recipeIngredients} numberOfLines={2}>
-          {item.ingredients}
-        </Text>
+  const filteredRecipes = recipes.filter((recipe) => {
+    const matchesCategory =
+      selectedCategory === 'all' ||
+      recipe.category === categories.find((c) => c.id === selectedCategory)?.name;
+    const matchesSearch =
+      searchQuery === '' ||
+      recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      recipe.ingredients.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
-        <View style={styles.recipeFooter}>
-          <View style={styles.authorContainer}>
-            <Ionicons name="person-circle-outline" size={16} color="#999" />
-            <Text style={styles.authorText}>{item.createdByName}</Text>
-          </View>
-          
-          <View style={styles.statsContainer}>
-            <View style={styles.stat}>
-              <Ionicons name="heart-outline" size={16} color="#999" />
-              <Text style={styles.statText}>{item.likes || 0}</Text>
-            </View>
-            <View style={styles.stat}>
-              <Ionicons name="bookmark-outline" size={16} color="#999" />
-              <Text style={styles.statText}>{item.saves || 0}</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  const trendingRecipe = recipes[0];
+  const recentRecipes = filteredRecipes.slice(0, 6);
 
   if (loading) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#E8505B" />
-        <Text style={styles.loadingText}>Loading recipes...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Welcome Header */}
-      <View style={styles.header}>
-        <Text style={styles.welcomeText}>Discover Authentic</Text>
-        <Text style={styles.headerTitle}>Sri Lankan Recipes</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E8505B']} />
+      }
+    >
+      {/* Hero Section */}
+      <View style={styles.heroSection}>
+        <Text style={styles.heroTitle}>Find best recipes for{'\n'}cooking</Text>
+        <Text style={styles.heroSubtitle}>Ayubowan! Discover Sri Lankan culinary heritage</Text>
+
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search recipes, ingredients..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          <TouchableOpacity style={styles.filterButton}>
+            <Ionicons name="options" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Recipe List */}
-      <FlatList
-        data={recipes}
-        renderItem={renderRecipeCard}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={recipes.length === 0 ? styles.emptyListContent : styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#E8505B']}
-            tintColor="#E8505B"
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="restaurant-outline" size={64} color="#DDD" />
-            <Text style={styles.emptyText}>No recipes yet</Text>
-            <Text style={styles.emptySubtext}>
-              Start adding recipes to see them here
-            </Text>
+      {/* Trending Now */}
+      {trendingRecipe && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Trending now</Text>
+              <Ionicons name="flame" size={18} color="#E8505B" />
+            </View>
+            <TouchableOpacity>
+              <Text style={styles.seeAllText}>See all →</Text>
+            </TouchableOpacity>
           </View>
-        }
-      />
-    </View>
+
+          <TouchableOpacity
+            style={styles.trendingCard}
+            onPress={() => router.push({ pathname: '/cooking', params: { recipeId: trendingRecipe.id } })}
+          >
+            {trendingRecipe.imageUrl ? (
+              <Image source={{ uri: trendingRecipe.imageUrl }} style={styles.trendingImage} />
+            ) : (
+              <View style={[styles.trendingImage, styles.placeholderImage]}>
+                <Ionicons name="restaurant" size={48} color="#E8505B" />
+              </View>
+            )}
+
+            <View style={styles.trendingOverlay}>
+              <View style={styles.trendingBadges}>
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={14} color="#FFD700" />
+                  <Text style={styles.ratingText}>4.9</Text>
+                  <Text style={styles.ratingCount}>(128)</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.bookmarkButtonWhite}
+              onPress={() => toggleBookmark(trendingRecipe.id)}
+            >
+              <Ionicons 
+                name={bookmarkedRecipes.has(trendingRecipe.id) ? 'bookmark' : 'bookmark-outline'} 
+                size={22} 
+                color={bookmarkedRecipes.has(trendingRecipe.id) ? '#E8505B' : '#333'} 
+              />
+            </TouchableOpacity>
+
+            <View style={styles.timeOverlayBottom}>
+              <Ionicons name="time-outline" size={14} color="#FFF" />
+              <Text style={styles.timeText}>45 Mins</Text>
+            </View>
+
+            <View style={styles.trendingContent}>
+              <Text style={styles.trendingTitle} numberOfLines={2}>
+                {trendingRecipe.name}
+              </Text>
+              <Text style={styles.trendingDescription} numberOfLines={2}>
+                {trendingRecipe.ingredients}
+              </Text>
+
+              <View style={styles.trendingFooter}>
+                <View style={styles.authorBadge}>
+                  <Text style={styles.authorInitial}>{trendingRecipe.createdByName?.charAt(0) || 'M'}</Text>
+                  <View>
+                    <Text style={styles.authorName}>By {trendingRecipe.createdByName}</Text>
+                    <Text style={styles.authorLocation}>Ambalangoda Heritage</Text>
+                  </View>
+                </View>
+
+                <View style={styles.categoryTag}>
+                  <Text style={styles.categoryTagText}>Traditional</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Popular Category */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Popular category</Text>
+          <Text style={styles.dishCount}>{filteredRecipes.length} dishes</Text>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category.id}
+              style={[
+                styles.categoryPill,
+                selectedCategory === category.id && styles.categoryPillActive,
+              ]}
+              onPress={() => setSelectedCategory(category.id)}
+            >
+              <Text
+                style={[
+                  styles.categoryPillText,
+                  selectedCategory === category.id && styles.categoryPillTextActive,
+                ]}
+              >
+                {category.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryCards}>
+          {recentRecipes.slice(0, 3).map((recipe) => (
+            <TouchableOpacity
+              key={recipe.id}
+              style={styles.categoryCard}
+              onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+            >
+              {recipe.imageUrl ? (
+                <Image source={{ uri: recipe.imageUrl }} style={styles.categoryCardImage} />
+              ) : (
+                <View style={[styles.categoryCardImage, styles.placeholderCategoryImage]}>
+                  <Ionicons name="restaurant" size={32} color="#E8505B" />
+                </View>
+              )}
+              <Text style={styles.categoryCardTitle} numberOfLines={2}>
+                {recipe.name}
+              </Text>
+              <View style={styles.categoryCardFooter}>
+                <Text style={styles.categoryCardTime}>TIME</Text>
+                <TouchableOpacity>
+                  <Ionicons name="bookmark-outline" size={16} color="#999" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.categoryCardDuration}>25 Mins</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Recent Recipe */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent recipe</Text>
+          <TouchableOpacity>
+            <Text style={styles.seeAllText}>See all →</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.recentGrid}>
+          {recentRecipes.slice(0, 3).map((recipe) => (
+            <TouchableOpacity
+              key={recipe.id}
+              style={styles.recentCard}
+              onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+            >
+              {recipe.imageUrl ? (
+                <Image source={{ uri: recipe.imageUrl }} style={styles.recentImage} />
+              ) : (
+                <View style={[styles.recentImage, styles.placeholderRecentImage]}>
+                  <Ionicons name="restaurant" size={32} color="#E8505B" />
+                </View>
+              )}
+              <View style={styles.recentRating}>
+                <Ionicons name="star" size={12} color="#FFD700" />
+                <Text style={styles.recentRatingText}>4.9</Text>
+              </View>
+              <View style={styles.recentContent}>
+                <Text style={styles.recentTitle} numberOfLines={1}>
+                  {recipe.name}
+                </Text>
+                <Text style={styles.recentAuthor}>By {recipe.createdByName}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Popular Creators */}
+      {creators.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Popular creators</Text>
+            <TouchableOpacity>
+              <Text style={styles.seeAllText}>See all →</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.creatorsScroll}>
+            {creators.map((creator) => (
+              <TouchableOpacity key={creator.uid} style={styles.creatorCard}>
+                <View style={styles.creatorAvatar}>
+                  <Ionicons name="person" size={32} color="#E8505B" />
+                </View>
+                <Text style={styles.creatorName} numberOfLines={1}>
+                  {creator.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Heritage Kitchen Tip */}
+      <View style={styles.tipCard}>
+        <View style={styles.tipHeader}>
+          <Ionicons name="restaurant" size={20} color="#E8505B" />
+          <Text style={styles.tipLabel}>HERITAGE KITCHEN TIP</Text>
+        </View>
+        <Text style={styles.tipTitle}>Curing a new unglazed claypot (Walanda)</Text>
+        <Text style={styles.tipDescription} numberOfLines={3}>
+          Boil rice kanji (congee water) inside your fresh earthen pot three times before the first spiced
+          curry to eliminate raw clay tannins and lock in natural heat retention.
+        </Text>
+        <TouchableOpacity>
+          <Text style={styles.tipLink}>Read step-by-step guide →</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.bottomSpacer} />
+    </ScrollView>
   );
 }
 
@@ -175,139 +429,424 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAF7',
   },
+  scrollContent: {
+    paddingBottom: 100,
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FAFAF7',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#999',
-  },
-  header: {
+
+  // Hero Section
+  heroSection: {
     padding: 20,
-    paddingTop: 12,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
   },
-  welcomeText: {
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    lineHeight: 32,
+  },
+  heroSubtitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
+    marginBottom: 20,
   },
-  headerTitle: {
-    fontSize: 24,
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  filterButton: {
+    backgroundColor: '#E8505B',
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+
+  // Section
+  section: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#E8505B',
+    color: '#1A1A1A',
   },
-  listContent: {
+  dishCount: {
+    fontSize: 14,
+    color: '#999',
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: '#E8505B',
+    fontWeight: '600',
+  },
+
+  // Trending Card
+  trendingCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  trendingImage: {
+    width: '100%',
+    height: 200,
+  },
+  placeholderImage: {
+    backgroundColor: '#FFF5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  trendingOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+  },
+  trendingBadges: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  ratingText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  ratingCount: {
+    color: '#FFF',
+    fontSize: 12,
+  },
+  bookmarkButtonWhite: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: '#FFF',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  timeOverlayBottom: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  timeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  trendingContent: {
     padding: 16,
   },
-  emptyListContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  trendingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    marginBottom: 8,
   },
-  recipeCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 10,
+  trendingDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
     marginBottom: 16,
+  },
+  trendingFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  authorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  authorInitial: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8505B',
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 40,
+  },
+  authorName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  authorLocation: {
+    fontSize: 12,
+    color: '#999',
+  },
+  categoryTag: {
+    backgroundColor: '#FFF5F5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E8505B',
+  },
+  categoryTagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E8505B',
+  },
+
+  // Categories
+  categoriesScroll: {
+    marginBottom: 16,
+  },
+  categoryPill: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    marginRight: 8,
+  },
+  categoryPillActive: {
+    backgroundColor: '#E8505B',
+  },
+  categoryPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  categoryPillTextActive: {
+    color: '#FFF',
+  },
+  categoryCards: {
+    marginTop: 8,
+  },
+  categoryCard: {
+    width: 140,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryCardImage: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    marginBottom: 12,
+  },
+  placeholderCategoryImage: {
+    backgroundColor: '#FFF5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  categoryCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  categoryCardTime: {
+    fontSize: 10,
+    color: '#999',
+    fontWeight: '600',
+  },
+  categoryCardDuration: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+  },
+
+  // Recent Grid
+  recentGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  recentCard: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  recipeImagePlaceholder: {
-    height: 180,
+  recentImage: {
+    width: '100%',
+    height: 120,
+  },
+  placeholderRecentImage: {
     backgroundColor: '#FFF5F5',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  recipeImage: {
-    width: '100%',
-    height: 180,
-    resizeMode: 'cover',
-  },
-  recipeContent: {
-    padding: 12,
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFF5F5',
-    borderWidth: 1,
-    borderColor: '#E8505B',
-    borderRadius: 6,
-    paddingHorizontal: 10,
+  recentRating: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    marginBottom: 8,
+    borderRadius: 12,
+    gap: 4,
   },
-  categoryBadgeText: {
+  recentRatingText: {
+    color: '#FFF',
     fontSize: 12,
     fontWeight: '600',
-    color: '#E8505B',
   },
-  recipeTitle: {
-    fontSize: 18,
+  recentContent: {
+    padding: 10,
+  },
+  recentTitle: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
+    color: '#1A1A1A',
+    marginBottom: 4,
   },
-  recipeIngredients: {
+  recentAuthor: {
+    fontSize: 11,
+    color: '#999',
+  },
+
+  // Creators
+  creatorsScroll: {
+    marginTop: 8,
+  },
+  creatorCard: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 70,
+  },
+  creatorAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#E8505B',
+  },
+  creatorName: {
+    fontSize: 12,
+    color: '#333',
+    textAlign: 'center',
+  },
+
+  // Tip Card
+  tipCard: {
+    marginHorizontal: 20,
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#E8505B',
+  },
+  tipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  tipLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#E8505B',
+    letterSpacing: 0.5,
+  },
+  tipTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  tipDescription: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
     marginBottom: 12,
   },
-  recipeFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  authorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  authorText: {
-    fontSize: 13,
-    color: '#999',
-    marginLeft: 4,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  stat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statText: {
-    fontSize: 13,
-    color: '#999',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#999',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  emptySubtext: {
+  tipLink: {
     fontSize: 14,
-    color: '#BBB',
-    textAlign: 'center',
+    color: '#E8505B',
+    fontWeight: '600',
+  },
+
+  bottomSpacer: {
+    height: 20,
   },
 });
