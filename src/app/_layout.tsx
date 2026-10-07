@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } 
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { auth } from '@/firebaseConfig';
@@ -109,7 +109,7 @@ export default function RootLayout() {
     } else if (user && isAdmin && !inAdminGroup) {
       // Admin user not in admin area, redirect to admin
       router.replace('/admin/' as any);
-    } else if (user && !isAdmin && inAdminGroup) {
+    } else if (user && isAdmin === false && inAdminGroup) {
       // Non-admin user trying to access admin area, redirect to tabs
       router.replace('/(tabs)');
     } else if (user && !isAdmin && !inAllowedRoute && !inAuthGroup) {

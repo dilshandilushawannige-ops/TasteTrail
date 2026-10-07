@@ -154,7 +154,17 @@ export default function TabLayout() {
             />
           ),
           headerTitle: '',
-          headerRight: () => null,
+          headerRight: () => (
+            <TouchableOpacity 
+              style={{ marginRight: 16 }}
+              onPress={() => {
+                // You can add settings navigation here
+                // router.push('/settings')
+              }}
+            >
+              <Ionicons name="settings-outline" size={24} color="#333" />
+            </TouchableOpacity>
+          ),
         }}
       />
     </Tabs>

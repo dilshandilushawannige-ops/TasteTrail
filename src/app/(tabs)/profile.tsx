@@ -1,41 +1,277 @@
-import { auth } from '@/firebaseConfig';
+import { auth, db } from '@/firebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Image,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
-/**
- * Profile Screen
- * Shows user information and allows logout
- */
+interface UserRecipe {
+  id: string;
+  name: string;
+  category?: string;
+  imageUrl?: string;
+  createdAt: any;
+  likes: number;
+  saves: number;
+}
+
+interface UserProfile {
+  name: string;
+  email: string;
+  bio?: string;
+  location?: string;
+}
+
 export default function ProfileScreen() {
+  const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const user = auth.currentUser;
+
+  const fetchUserData = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('Fetching recipes for user:', user.uid);
+      
+      // Fetch user profile
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        setUserProfile(userDoc.data() as UserProfile);
+      }
+
+      // Fetch user's recipes
+      const recipesQuery = query(
+        collection(db, 'recipes'),
+        where('createdBy', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(recipesQuery);
+
+      console.log('Found recipes:', querySnapshot.size);
+
+      const fetchedRecipes: UserRecipe[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('Recipe data:', { id: doc.id, createdBy: data.createdBy, name: data.name });
+        fetchedRecipes.push({ id: doc.id, ...data } as UserRecipe);
+      });
+
+      setUserRecipes(fetchedRecipes);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      
+      // If the error is about missing index, try without orderBy
+      try {
+        console.log('Retrying without orderBy...');
+        const recipesQuery = query(
+          collection(db, 'recipes'),
+          where('createdBy', '==', user.uid)
+        );
+        const querySnapshot = await getDocs(recipesQuery);
+
+        console.log('Found recipes (no order):', querySnapshot.size);
+
+        const fetchedRecipes: UserRecipe[] = [];
+        querySnapshot.forEach((doc) => {
+          fetchedRecipes.push({ id: doc.id, ...doc.data() } as UserRecipe);
+        });
+
+        // Sort manually by createdAt
+        fetchedRecipes.sort((a, b) => {
+          const aTime = a.createdAt?.seconds || 0;
+          const bTime = b.createdAt?.seconds || 0;
+          return bTime - aTime;
+        });
+
+        setUserRecipes(fetchedRecipes);
+      } catch (retryError) {
+        console.error('Retry also failed:', retryError);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
+  }, [user]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchUserData();
+  };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // Navigation is handled automatically by _layout.tsx
+      router.replace('/login');
     } catch (error) {
-      Alert.alert('Error', 'Failed to log out. Please try again.');
+      console.error('Error signing out:', error);
     }
   };
 
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#E8505B" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.centerContainer}>
+        <Ionicons name="person-outline" size={64} color="#DDD" />
+        <Text style={styles.emptyText}>Please login to view profile</Text>
+      </View>
+    );
+  }
+
+  const totalSaves = userRecipes.reduce((sum, recipe) => sum + (recipe.saves || 0), 0);
+  const averageRating = userRecipes.length > 0 ? 4.9 : 0;
+
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E8505B']} />
+      }
+    >
+      {/* Profile Section */}
       <View style={styles.profileSection}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
-          </Text>
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={48} color="#E8505B" />
+          </View>
+          <View style={styles.verifiedBadge}>
+            <Ionicons name="checkmark" size={16} color="#FFF" />
+          </View>
         </View>
-        <Text style={styles.name}>{user?.displayName || 'User'}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+
+        <Text style={styles.userName}>{userProfile?.name || 'User'}</Text>
+        <Text style={styles.userBio}>
+          {userProfile?.location || 'Southern Heritage Home Cook'} • Galle, Sri Lanka
+        </Text>
+
+        <View style={styles.badge}>
+          <Ionicons name="trophy" size={14} color="#E8505B" />
+          <Text style={styles.badgeText}>Master Recipe Keeper</Text>
+          <Text style={styles.badgeCount}>14 Preserved</Text>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{userRecipes.length}</Text>
+            <Text style={styles.statLabel}>Recipes</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{totalSaves}</Text>
+            <Text style={styles.statLabel}>Saves</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={18} color="#FFD700" />
+              <Text style={styles.statNumber}>{averageRating.toFixed(1)}</Text>
+            </View>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
+        </View>
       </View>
 
-      <View style={styles.actionsSection}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Log Out</Text>
-        </TouchableOpacity>
+      {/* My Recipes Section */}
+      <View style={styles.recipesSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>My recipes ({userRecipes.length})</Text>
+          <TouchableOpacity
+            style={styles.newRecipeButton}
+            onPress={() => router.push('/(tabs)/addRecipe')}
+          >
+            <Ionicons name="add" size={20} color="#FFF" />
+            <Text style={styles.newRecipeText}>New Recipe</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Recipe List */}
+        {userRecipes.map((recipe) => (
+          <TouchableOpacity
+            key={recipe.id}
+            style={styles.recipeCard}
+            onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+          >
+            {recipe.imageUrl ? (
+              <Image source={{ uri: recipe.imageUrl }} style={styles.recipeImage} />
+            ) : (
+              <View style={[styles.recipeImage, styles.placeholderImage]}>
+                <Ionicons name="restaurant" size={32} color="#E8505B" />
+              </View>
+            )}
+
+            <View style={styles.recipeRating}>
+              <Ionicons name="star" size={12} color="#FFD700" />
+              <Text style={styles.recipeRatingText}>4.9</Text>
+            </View>
+
+            <View style={styles.recipeContent}>
+              <Text style={styles.recipeTitle} numberOfLines={1}>
+                {recipe.name}
+              </Text>
+
+              <View style={styles.recipeStatus}>
+                <Ionicons name="earth" size={12} color="#4CAF50" />
+                <Text style={styles.statusText}>Public, credited</Text>
+              </View>
+
+              <View style={styles.recipeStats}>
+                <Text style={styles.recipeStat}>{recipe.category || 'Traditional'}</Text>
+                <Text style={styles.recipeStat}>• {recipe.saves || 0} saves</Text>
+                <Text style={styles.recipeStat}>• {recipe.likes || 0} cooks</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.moreButton}>
+              <Ionicons name="ellipsis-horizontal" size={20} color="#999" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        ))}
+
+        {userRecipes.length === 0 && (
+          <View style={styles.emptyRecipes}>
+            <Ionicons name="document-text-outline" size={48} color="#DDD" />
+            <Text style={styles.emptyText}>No recipes yet</Text>
+            <Text style={styles.emptySubtext}>
+              Share your culinary heritage by adding your first recipe
+            </Text>
+            <TouchableOpacity
+              style={styles.addFirstButton}
+              onPress={() => router.push('/(tabs)/addRecipe')}
+            >
+              <Text style={styles.addFirstText}>Add Your First Recipe</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -44,51 +280,249 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAF7',
   },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FAFAF7',
+  },
+
+  // Profile Section
   profileSection: {
     alignItems: 'center',
-    padding: 32,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E8505B',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FFF5F5',
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#E8505B',
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  userBio: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  badgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E8505B',
+  },
+  badgeCount: {
+    fontSize: 12,
+    color: '#999',
+  },
+
+  // Stats
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAF7',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: '#999',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E5E5E5',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+
+  // Recipes Section
+  recipesSection: {
+    padding: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  avatarText: {
-    fontSize: 32,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#FAFAF7',
+    color: '#1A1A1A',
   },
-  name: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+  newRecipeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E8505B',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
-  email: {
-    fontSize: 16,
-    color: '#999',
+  newRecipeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
   },
-  actionsSection: {
-    padding: 16,
-  },
-  logoutButton: {
+
+  // Recipe Card
+  recipeCard: {
+    flexDirection: 'row',
     backgroundColor: '#FFF',
-    borderWidth: 2,
-    borderColor: '#E8505B',
-    borderRadius: 10,
-    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  recipeImage: {
+    width: 100,
+    height: 100,
+  },
+  placeholderImage: {
+    backgroundColor: '#FFF5F5',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  logoutButtonText: {
-    color: '#E8505B',
-    fontSize: 16,
+  recipeRating: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  recipeRatingText: {
+    color: '#FFF',
+    fontSize: 12,
     fontWeight: '600',
+  },
+  recipeContent: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'center',
+  },
+  recipeTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 6,
+  },
+  recipeStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  recipeStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  recipeStat: {
+    fontSize: 12,
+    color: '#999',
+    marginRight: 4,
+  },
+  moreButton: {
+    padding: 12,
+    justifyContent: 'center',
+  },
+
+  // Empty State
+  emptyRecipes: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#999',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#BBB',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  addFirstButton: {
+    backgroundColor: '#E8505B',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  addFirstText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
