@@ -11,7 +11,8 @@
       "icon": "./assets/expo.icon",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow TasteTrail to use speech recognition to transcribe your recipes.",
-        "NSMicrophoneUsageDescription": "Allow TasteTrail to use the microphone for voice recipe entry."
+        "NSMicrophoneUsageDescription": "Allow TasteTrail to use the microphone for voice recipe entry.",
+        "NSLocationWhenInUseUsageDescription": "Allow TasteTrail to access your location to help you add restaurant locations and find nearby restaurants."
       }
     },
     "android": {
@@ -23,7 +24,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.dilshan2001.TasteTrail"
     },
@@ -50,7 +53,8 @@
             "com.google.android.googlequicksearchbox"
           ]
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true,
