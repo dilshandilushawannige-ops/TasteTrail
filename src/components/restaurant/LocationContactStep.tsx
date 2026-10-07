@@ -245,7 +245,7 @@ export function LocationContactStep() {
             color="#FFF" 
           />
           <Text style={styles.chooseLocationText}>
-            {isGeocodingLocation ? 'Finding Location...' : 'Find Address Location'}
+            {isGeocodingLocation ? 'Finding...' : 'Find Location from Address'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -262,7 +262,7 @@ export function LocationContactStep() {
   );
 
   const renderContactSection = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, styles.subsequentSection]}>
       <Text style={styles.sectionTitle}>Contact Information</Text>
     </View>
   );
@@ -312,7 +312,7 @@ export function LocationContactStep() {
   );
 
   const renderOpeningHoursSection = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, styles.subsequentSection]}>
       <Text style={styles.sectionTitle}>Opening Hours</Text>
     </View>
   );
@@ -391,14 +391,19 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingTop: 0,
+    paddingBottom: 10, // Reduced bottom padding
+    marginTop: -4, // Negative margin to pull closer to progress bar
+  },
+  subsequentSection: {
+    marginTop: 8, // Small gap between sections instead of negative margin
+    paddingTop: 12, // Small top padding for subsequent sections
   },
   sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22, // Reduced from 24 to 22
+    fontWeight: '600', // Reduced boldness to match Step 1
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 4, // Further reduced margin
   },
   introText: {
     fontSize: 14,
@@ -407,7 +412,7 @@ const styles = StyleSheet.create({
   },
   fieldContainer: {
     paddingHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 18, // Further reduced for more compact layout to match Step 1
   },
   fieldLabel: {
     fontSize: 16,
@@ -452,13 +457,12 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   locationButtons: {
-    flexDirection: 'row',
-    gap: 12,
+    flexDirection: 'column', // Changed to column for better fit
+    gap: 10, // Reduced gap
     marginTop: 12,
     marginBottom: 12,
   },
   currentLocationButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -466,26 +470,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E8505B',
-    paddingVertical: 14,
+    paddingVertical: 12, // Slightly reduced padding
+    paddingHorizontal: 16, // Added horizontal padding
     gap: 8,
   },
   currentLocationText: {
-    fontSize: 14,
+    fontSize: 13, // Slightly smaller font
     fontWeight: '500',
     color: '#E8505B',
   },
   chooseLocationButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#E8505B',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 12, // Slightly reduced padding
+    paddingHorizontal: 16, // Added horizontal padding
     gap: 8,
   },
   chooseLocationText: {
-    fontSize: 14,
+    fontSize: 13, // Slightly smaller font
     fontWeight: '500',
     color: '#FFF',
   },

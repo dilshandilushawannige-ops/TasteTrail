@@ -121,7 +121,7 @@ export function AdditionalPhotosUploader({
       >
         <View style={styles.addButtonContent}>
           <View style={styles.plusIconContainer}>
-            <Ionicons name="add" size={24} color="#E8505B" />
+            <Ionicons name="add" size={14} color="#E8505B" />
           </View>
           <Text style={styles.addButtonText}>Add Photos</Text>
         </View>
@@ -136,30 +136,31 @@ export function AdditionalPhotosUploader({
     }
 
     return (
-      <FlatList
-        data={data}
-        renderItem={({ item, index }) => {
+      <View style={styles.horizontalGrid}>
+        {data.map((item, index) => {
           if (item === 'add_button') {
-            return renderAddButton();
+            return (
+              <View key={`add_${index}`} style={styles.smallTileContainer}>
+                {renderAddButton()}
+              </View>
+            );
           }
-          return renderPhotoItem({ item: item as string, index });
-        }}
-        numColumns={2}
-        scrollEnabled={false}
-        keyExtractor={(item, index) => 
-          typeof item === 'string' && item !== 'add_button' ? item : `add_${index}`
-        }
-        columnWrapperStyle={photoUris.length > 0 ? styles.row : undefined}
-        style={styles.grid}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
+          return (
+            <View key={item as string} style={styles.smallTileContainer}>
+              {renderPhotoItem({ item: item as string, index })}
+            </View>
+          );
+        })}
+      </View>
     );
   };
 
   return (
     <View style={styles.container}>
       {photoUris.length === 0 ? (
-        renderAddButton()
+        <View style={styles.smallTileContainer}>
+          {renderAddButton()}
+        </View>
       ) : (
         renderGrid()
       )}
@@ -171,20 +172,18 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 8,
   },
-  grid: {
-    flex: 1,
+  horizontalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  row: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  separator: {
-    height: 12,
+  smallTileContainer: {
+    width: 72, // Small square tile like reference (about 70-75dp)
+    height: 72,
   },
   photoItem: {
-    flex: 1,
-    aspectRatio: 1,
-    marginHorizontal: 4,
+    width: '100%',
+    height: '100%',
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#F0F0F0',
@@ -196,35 +195,34 @@ const styles = StyleSheet.create({
   },
   removePhotoButton: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   photoIndex: {
     position: 'absolute',
-    bottom: 6,
-    left: 6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    bottom: 4,
+    left: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   photoIndexText: {
     color: '#FFF',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
   },
   addButton: {
-    flex: 1,
-    aspectRatio: 1,
-    marginHorizontal: 4,
+    width: '100%',
+    height: '100%',
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#E8505B',
@@ -232,27 +230,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5F5',
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 120,
   },
   addButtonContent: {
     alignItems: 'center',
   },
   plusIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 20, // Smaller icon container
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
     shadowColor: '#E8505B',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 2,
+    elevation: 1,
   },
   addButtonText: {
-    fontSize: 12,
+    fontSize: 10, // Tiny text like reference
     fontWeight: '600',
     color: '#E8505B',
     textAlign: 'center',

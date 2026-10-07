@@ -5,7 +5,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import {
   Alert,
   ScrollView,
@@ -73,10 +73,23 @@ function AddRestaurantContent() {
   const handleNext = () => {
     if (validateStep1()) {
       nextStep();
+      // Reset scroll position to top when navigating to Step 2
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      }, 50);
     } else {
       // Scroll to top to show errors
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }
+  };
+
+  // Handle back button (Step 2 -> Step 1)
+  const handlePrevStep = () => {
+    prevStep();
+    // Reset scroll position to top when going back to Step 1
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, 50);
   };
 
   // Handle save as draft
@@ -186,7 +199,7 @@ function AddRestaurantContent() {
             disabled={isSubmitting}
           >
             <Text style={styles.nextButtonText}>Next</Text>
-            <Ionicons name="chevron-forward" size={20} color="#FFF" />
+            <Ionicons name="arrow-forward" size={18} color="#FFF" />
           </TouchableOpacity>
         </View>
       );
@@ -219,20 +232,24 @@ function AddRestaurantContent() {
       <Stack.Screen
         options={{
           headerShown: true,
-          headerTitle: currentStep === 1 ? 'Step 1 of 2: Restaurant Details' : 'Step 2 of 2: Location & Contact',
+          headerTitle: currentStep === 1 ? 'Step 1 Of 2: Restaurant Details' : 'Step 2 Of 2: Location & Contact',
+          headerTitleStyle: {
+            fontSize: 18,
+            fontWeight: 'normal', // Removed bold - using normal weight
+            color: '#333',
+          },
+          headerTitleAlign: 'left', // Align title to left to work with marginLeft
           headerLeft: () => (
-            <TouchableOpacity onPress={currentStep === 1 ? handleCancel : prevStep}>
-              <Ionicons name="chevron-back" size={24} color="#E8505B" />
+            <TouchableOpacity onPress={currentStep === 1 ? handleCancel : handlePrevStep} style={{ marginLeft: 20, marginRight: 15 }}>
+              <Ionicons name="arrow-back" size={24} color="#333" />
             </TouchableOpacity>
           ),
-          headerRight: () => (
-            <TouchableOpacity>
-              <Ionicons name="settings-outline" size={24} color="#E8505B" />
-            </TouchableOpacity>
-          ),
+          headerRight: undefined, // Remove settings icons completely
           headerStyle: {
             backgroundColor: '#FAFAF7',
-          },
+            shadowOpacity: 0, // Remove shadow on iOS
+            borderBottomWidth: 0, // Remove bottom border
+          } as any, // Type assertion for elevation on Android
           headerTintColor: '#333',
         }}
       />
@@ -299,9 +316,10 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    paddingTop: 0,
+    paddingBottom: 4, // Further reduced bottom padding
+    marginTop: -12, // Increased negative margin to pull even closer to header
+    // Remove bottom border that creates divider line
   },
   stepIndicator: {
     fontSize: 12,
@@ -332,16 +350,16 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: 32,
+    paddingVertical: 16, // Slightly reduced padding
+    paddingBottom: 28,
     backgroundColor: '#FAFAF7',
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: '#E0E0E0', // Thin top border only
     gap: 12,
   },
   cancelButton: {
-    flex: 1,
-    paddingVertical: 16,
+    flex: 0.8, // Narrower button (about 1/3 width)
+    paddingVertical: 12, // Reduced height (48dp)
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E0E0E0',
@@ -350,28 +368,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller font
     fontWeight: '600',
     color: '#666',
   },
   nextButton: {
-    flex: 1,
-    paddingVertical: 16,
+    flex: 1.5, // Wider button (about 2/3 width)
+    paddingVertical: 12, // Reduced height (48dp)
     borderRadius: 12,
     backgroundColor: '#E8505B',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 6, // Slightly smaller gap
   },
   nextButtonText: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller font
     fontWeight: '600',
     color: '#FFF',
   },
   draftButton: {
-    flex: 1,
-    paddingVertical: 16,
+    flex: 0.8, // Narrower button
+    paddingVertical: 12, // Reduced height
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E0E0E0',
@@ -380,22 +398,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   draftButtonText: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller font
     fontWeight: '600',
     color: '#666',
   },
   publishButton: {
-    flex: 1,
-    paddingVertical: 16,
+    flex: 1.5, // Wider button
+    paddingVertical: 12, // Reduced height
     borderRadius: 12,
     backgroundColor: '#E8505B',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   publishButtonText: {
-    fontSize: 16,
+    fontSize: 15, // Slightly smaller font
     fontWeight: '600',
     color: '#FFF',
   },

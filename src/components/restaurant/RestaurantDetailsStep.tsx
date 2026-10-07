@@ -45,7 +45,7 @@ export function RestaurantDetailsStep() {
         Restaurant Name <Text style={styles.required}>*</Text>
       </Text>
       <View style={styles.inputContainer}>
-        <Ionicons name="restaurant-outline" size={20} color="#999" style={styles.inputIcon} />
+        <Ionicons name="restaurant" size={20} color="#333" style={styles.inputIcon} />
         <TextInput
           style={styles.textInput}
           placeholder="e.g. Amma's Southern Kitchen"
@@ -102,7 +102,7 @@ export function RestaurantDetailsStep() {
     <View style={styles.fieldContainer}>
       <Text style={styles.fieldLabel}>Signature Dish</Text>
       <View style={styles.inputContainer}>
-        <Ionicons name="restaurant" size={20} color="#999" style={styles.inputIcon} />
+        <Ionicons name="restaurant" size={20} color="#333" style={styles.inputIcon} />
         <TextInput
           style={styles.textInput}
           placeholder="e.g. Black Pepper Claypot Fish Ambul Thiyal"
@@ -200,14 +200,15 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingTop: 0,
+    paddingBottom: 10, // Reduced bottom padding
+    marginTop: -4, // Negative margin to pull closer to progress bar
   },
   sectionTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '600', // Reduced boldness
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 4, // Further reduced margin
   },
   introText: {
     fontSize: 14,
@@ -216,7 +217,7 @@ const styles = StyleSheet.create({
   },
   fieldContainer: {
     paddingHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 18, // Further reduced for more compact layout
   },
   fieldLabel: {
     fontSize: 16,
@@ -240,10 +241,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     paddingHorizontal: 16,
-    minHeight: 50,
+    minHeight: 52, // Slightly taller to match reference
   },
   inputIcon: {
     marginRight: 12,
+    color: '#333', // Darker icons like reference
   },
   textInput: {
     flex: 1,

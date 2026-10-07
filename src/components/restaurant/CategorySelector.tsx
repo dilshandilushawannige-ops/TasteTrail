@@ -48,7 +48,7 @@ export function CategorySelector({
       activeOpacity={0.7}
     >
       <View style={styles.triggerContent}>
-        <Ionicons name="grid-outline" size={20} color="#999" style={styles.triggerIcon} />
+        <Ionicons name="grid" size={20} color="#333" style={styles.triggerIcon} />
         <Text style={[
           styles.triggerText,
           !selectedCategory && styles.placeholderText
