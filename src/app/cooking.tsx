@@ -1,9 +1,11 @@
 import { auth } from '@/firebaseConfig';
 import { cookingStyles as styles } from '@/styles/cooking.styles';
-import { deleteCooking, loadCooking, startCooking, updateCooking } from '@/services/cookingSessions';
+import { deleteCooking, fetchRecipeImageUrl, loadCooking, startCooking, updateCooking } from '@/services/cookingSessions';
 import type { CookingRecipe, CookingSession, SessionChanges } from '@/services/cookingSessions';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as Speech from 'expo-speech';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -45,6 +47,21 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   const lock = useRef(false);
   const generation = useRef(0);
 
+  // ── Recipe photo state ────────────────────────────────────────────────────
+  // imageUrl is kept separately from the recipe object so we can patch in a
+  // photo that was missing from an older saved session without touching the
+  // session's cooking instructions or progress.
+  //
+  // fetchedImageUrl:
+  //   undefined = fetch not yet attempted (or reset after recipe switch)
+  //   null      = fetch completed, no photo available
+  //   string    = fetch completed, photo URL retrieved
+  // Only ever set from async .then()/.catch() to satisfy set-state-in-effect.
+  const [fetchedImageUrl, setFetchedImageUrl] = useState<string | null | undefined>(undefined);
+  // imageDecoding tracks the expo-image decode state for the URL we actually show.
+  const [imageDecoding, setImageDecoding] = useState<'idle' | 'loading' | 'error'>('idle');
+  // ─────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     const lifecycle = generation;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -55,6 +72,9 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
       setError('');
       setConfirmDelete(false);
       setTab('ingredients');
+      // Reset photo state whenever we switch recipes or re-auth.
+      setFetchedImageUrl(undefined);
+      setImageDecoding('idle');
       if (!user || !recipeId || recipeId.includes('/')) {
         setError(!user ? 'Sign in to start cooking.' : 'Open a recipe from the Home screen.');
         setLoading(false);
@@ -73,6 +93,38 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
     });
     return () => { lifecycle.current++; unsubscribe(); };
   }, [recipeId, retry]);
+
+  // ── Photo side-effect ─────────────────────────────────────────────────────
+  // Only fires for older sessions where the recipe snapshot has no imageUrl.
+  // Attempts one optional Firestore read; any failure is silently swallowed.
+  // setFetchedImageUrl is only called from the async .then()/.catch() callbacks
+  // (never synchronously in the effect body) to satisfy set-state-in-effect.
+  useEffect(() => {
+    // If the recipe snapshot already has a URL, nothing to fetch.
+    if (!recipe || recipe.imageUrl || !recipeId) return;
+
+    fetchRecipeImageUrl(recipeId).then((url) => {
+      setFetchedImageUrl(url ?? null);
+    }).catch(() => {
+      setFetchedImageUrl(null); // non-fatal; placeholder will show
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe?.id, recipeId]);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Derived photo URL ─────────────────────────────────────────────────────
+  // Computed inline on every render from recipe state — no extra useEffect.
+  //   recipe.imageUrl   → direct URL from the recipe/session snapshot (new recipes)
+  //   fetchedImageUrl   → optional Firestore lookup result for older sessions
+  //   undefined/null    → no photo available; placeholder shown
+  const displayImageUrl: string | undefined =
+    recipe?.imageUrl ??
+    (typeof fetchedImageUrl === 'string' ? fetchedImageUrl : undefined);
+
+  // photoFetchPending: true while awaiting the optional Firestore lookup.
+  const photoFetchPending =
+    !!recipe && !recipe.imageUrl && !!recipeId && fetchedImageUrl === undefined;
+  // ─────────────────────────────────────────────────────────────────────────
 
   useFocusEffect(useCallback(() => {
     return () => { void Speech.stop().catch(() => undefined); };
@@ -189,6 +241,46 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
 
         {recipe && <>
           <Text style={styles.title}>{recipe.name}</Text>
+
+          {/* ── Recipe photo ──────────────────────────────────────────────── */}
+          <View style={styles.recipeImageWrapper}
+            accessibilityRole="image"
+            accessibilityLabel={displayImageUrl ? `Photo of ${recipe.name}` : 'Recipe photo unavailable'}>
+            {/* The actual image — rendered when we have a URL and no decode error */}
+            {displayImageUrl && imageDecoding !== 'error' ? (
+              <Image
+                source={{ uri: displayImageUrl }}
+                style={styles.recipeImage}
+                contentFit="cover"
+                transition={250}
+                onLoadStart={() => setImageDecoding('loading')}
+                onLoadEnd={() => setImageDecoding('idle')}
+                onError={() => setImageDecoding('error')}
+                accessibilityLabel={`Photo of ${recipe.name}`}
+              />
+            ) : null}
+            {/* Spinner — while Firestore optional fetch is pending or image is decoding */}
+            {(photoFetchPending || imageDecoding === 'loading') && (
+              <View style={[styles.recipeImagePlaceholder, { position: 'absolute', inset: 0 } as object]}>
+                <ActivityIndicator size="small" color="#E8505B" />
+              </View>
+            )}
+            {/* Neutral placeholder — no URL, broken URL, or decode error */}
+            {!displayImageUrl && !photoFetchPending && (
+              <View style={styles.recipeImagePlaceholder}>
+                <Ionicons name="restaurant-outline" size={44} color="#E8505B" style={styles.recipeImagePlaceholderIcon} />
+                <Text style={styles.recipeImagePlaceholderText}>Recipe photo unavailable</Text>
+              </View>
+            )}
+            {displayImageUrl && imageDecoding === 'error' && (
+              <View style={styles.recipeImagePlaceholder}>
+                <Ionicons name="restaurant-outline" size={44} color="#E8505B" style={styles.recipeImagePlaceholderIcon} />
+                <Text style={styles.recipeImagePlaceholderText}>Recipe photo unavailable</Text>
+              </View>
+            )}
+          </View>
+          {/* ─────────────────────────────────────────────────────────────── */}
+
           <Text style={styles.muted}>
             {session ? 'Saved session loaded. Each step change is saved before moving on.' : 'Review the ingredients, then start your cooking session.'}
           </Text>

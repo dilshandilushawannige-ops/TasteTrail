@@ -97,6 +97,7 @@ export default function RootLayout() {
 
     if (!user && !inAuthGroup) {
       // User is not logged in and not on auth screens, redirect to login
+      console.log('Redirecting to login - no user');
       router.replace('/login');
     } else if (user && inAuthGroup) {
       // User is logged in but still on auth screens, redirect based on admin status
