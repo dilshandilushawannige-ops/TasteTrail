@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } 
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { auth } from '@/firebaseConfig';
@@ -100,6 +100,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
     const inAdminGroup = segments[0] === 'admin';
     const inTabsGroup = segments[0] === '(tabs)';
+    const inCookingScreen = segments[0] === 'cooking';
 
     console.log('Navigation check:', {
       user: !!user,
@@ -107,7 +108,8 @@ export default function RootLayout() {
       segments: segments[0],
       inAuthGroup,
       inAdminGroup,
-      inTabsGroup
+      inTabsGroup,
+      inCookingScreen
     });
 
     if (!user && !inAuthGroup) {
@@ -127,12 +129,12 @@ export default function RootLayout() {
       // Admin user not in admin area, redirect to admin
       console.log('Redirecting admin user to admin area');
       router.replace('/admin/' as any);
-    } else if (user && !isAdmin && inAdminGroup) {
+    } else if (user && isAdmin === false && inAdminGroup) {
       // Non-admin user trying to access admin area, redirect to tabs
       console.log('Redirecting non-admin from admin area');
       router.replace('/(tabs)');
-    } else if (user && !isAdmin && !inTabsGroup && !inAuthGroup) {
-      // Regular user not in tabs area, redirect to tabs
+    } else if (user && isAdmin === false && !inTabsGroup && !inAuthGroup && !inCookingScreen) {
+      // Regular user not in tabs area or cooking screen, redirect to tabs
       console.log('Redirecting regular user to tabs');
       router.replace('/(tabs)');
     }
