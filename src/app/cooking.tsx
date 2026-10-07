@@ -85,6 +85,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   const [clock, setClock] = useState(() => Date.now());
   const [showVoicePlayer, setShowVoicePlayer] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [confirmCookAgain, setConfirmCookAgain] = useState(false);
   const lock = useRef(false);
   const generation = useRef(0);
 
@@ -112,6 +113,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
       setSession(null);
       setError('');
       setConfirmDelete(false);
+      setConfirmCookAgain(false);
       setTab('ingredients');
       // Reset photo state whenever we switch recipes or re-auth.
       setFetchedImageUrl(undefined);
@@ -209,6 +211,21 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
       if (token !== generation.current) return;
       setRecipe(saved.recipe);
       setSession(saved);
+      setTab('steps');
+    });
+  }
+
+  async function cookAgain() {
+    if (!recipe) return;
+    await run(async (uid, token) => {
+      // Delete the completed session
+      await deleteCooking(uid, recipe.id);
+      // Start fresh session
+      const saved = await startCooking(uid, recipe);
+      if (token !== generation.current) return;
+      setRecipe(saved.recipe);
+      setSession(saved);
+      setConfirmCookAgain(false);
       setTab('steps');
     });
   }
@@ -383,7 +400,23 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
           {session?.status === 'completed' && (
             <View style={styles.card}>
               <Text style={styles.success}>Cooking completed!</Text>
-              <Text style={styles.muted}>Your completed session is saved. Delete this session below if you want to cook it again from the beginning.</Text>
+              <Text style={styles.muted}>
+                {confirmCookAgain 
+                  ? 'This will delete your saved progress and start fresh from step 1.' 
+                  : 'Great job! Want to cook this recipe again?'}
+              </Text>
+              {!confirmCookAgain ? (
+                <Button title="Cook Again" onPress={() => setConfirmCookAgain(true)} disabled={busy} />
+              ) : (
+                <View style={styles.row}>
+                  <View style={styles.flex}>
+                    <Button title="Yes, start fresh" onPress={() => void cookAgain()} disabled={busy} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Button title="Cancel" secondary onPress={() => setConfirmCookAgain(false)} disabled={busy} />
+                  </View>
+                </View>
+              )}
             </View>
           )}
 
