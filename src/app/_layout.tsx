@@ -34,16 +34,11 @@ export default function RootLayout() {
     try {
       setClaimsLoading(true);
       setClaimsError(null);
-      console.log('Checking admin claims for user:', currentUser.email);
       
       // Refresh token to get latest claims
       await currentUser.getIdToken(true);
       const idTokenResult = await currentUser.getIdTokenResult();
       const claims = idTokenResult.claims as AdminClaims;
-      
-      console.log('Raw claims object:', JSON.stringify(claims, null, 2));
-      console.log('Admin claim value:', claims.admin);
-      console.log('Admin claim type:', typeof claims.admin);
       
       // Check for admin claim in various possible formats
       const isAdminUser = claims.admin === true || 
@@ -52,7 +47,6 @@ export default function RootLayout() {
                          claims.role === 'admin' ||
                          (claims.roles && Array.isArray(claims.roles) && claims.roles.includes('admin'));
       
-      console.log('Final admin status:', isAdminUser);
       setIsAdmin(isAdminUser);
     } catch (error) {
       console.error('Error checking admin claims:', error);
@@ -73,7 +67,6 @@ export default function RootLayout() {
   // Listen to Firebase authentication state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log('Auth state changed:', currentUser?.email || 'no user');
       setUser(currentUser);
       
       if (currentUser) {
@@ -100,17 +93,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
     const inAdminGroup = segments[0] === 'admin';
     const inTabsGroup = segments[0] === '(tabs)';
-    const inCookingScreen = segments[0] === 'cooking';
-
-    console.log('Navigation check:', {
-      user: !!user,
-      isAdmin,
-      segments: segments[0],
-      inAuthGroup,
-      inAdminGroup,
-      inTabsGroup,
-      inCookingScreen
-    });
+    const inAllowedRoute = segments[0] === 'cooking' || segments[0] === 'explore' || inTabsGroup;
 
     if (!user && !inAuthGroup) {
       // User is not logged in and not on auth screens, redirect to login
@@ -119,23 +102,18 @@ export default function RootLayout() {
     } else if (user && inAuthGroup) {
       // User is logged in but still on auth screens, redirect based on admin status
       if (isAdmin) {
-        console.log('Redirecting to admin dashboard');
         router.replace('/admin/' as any);
       } else {
-        console.log('Redirecting to user tabs');
         router.replace('/(tabs)');
       }
     } else if (user && isAdmin && !inAdminGroup) {
       // Admin user not in admin area, redirect to admin
-      console.log('Redirecting admin user to admin area');
       router.replace('/admin/' as any);
     } else if (user && isAdmin === false && inAdminGroup) {
       // Non-admin user trying to access admin area, redirect to tabs
-      console.log('Redirecting non-admin from admin area');
       router.replace('/(tabs)');
-    } else if (user && isAdmin === false && !inTabsGroup && !inAuthGroup && !inCookingScreen) {
-      // Regular user not in tabs area or cooking screen, redirect to tabs
-      console.log('Redirecting regular user to tabs');
+    } else if (user && !isAdmin && !inAllowedRoute && !inAuthGroup) {
+      // Regular user not in allowed routes, redirect to tabs
       router.replace('/(tabs)');
     }
   }, [user, segments, initializing, isAdmin, claimsLoading]);

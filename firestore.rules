@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      // Check multiple possible admin claim structures
+      return request.auth != null && (
+        request.auth.token.admin == true ||
+        request.auth.token.isAdmin == true ||
+        request.auth.token.role == 'admin' ||
+        ('admin' in request.auth.token.roles) ||
+        (resource != null && request.auth.uid == resource.data.createdBy)
+      );
+    }
+    
+    // Restaurant collection rules
+    match /restaurants/{restaurantId} {
+      // Allow read for:
+      // - Active restaurants (everyone authenticated)
+      // - All restaurants (admins only)
+      allow read: if request.auth != null && (
+        (resource.data.status == 'active') || isAdmin()
+      );
+      
+      // Allow create: admins only
+      allow create: if isAdmin() && 
+        // Ensure required fields are present for create
+        request.resource.data.keys().hasAll([
+          'name', 'category', 'status', 'createdBy', 'createdAt'
+        ]) &&
+        // Ensure createdBy matches current user
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Allow update: admins only
+      allow update: if isAdmin() && 
+        // Prevent changing createdBy and createdAt
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      
+      // Allow delete: admins only
+      allow delete: if isAdmin();
+    }
+    
+    // Default deny for all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
