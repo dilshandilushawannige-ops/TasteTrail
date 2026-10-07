@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router';
 import { Platform } from 'react-native';
 
 /**
@@ -7,12 +7,18 @@ import { Platform } from 'react-native';
  * Contains: Overview, Restaurants, Users, and Profile tabs
  */
 export default function AdminTabLayout() {
+  const pathname = usePathname();
+  
+  // Hide tab bar when on forms or other modal-like screens
+  const shouldHideTabBar = pathname?.includes('/add-restaurant') || 
+                          pathname?.includes('/edit-restaurant');
+
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: '#E8505B',
         tabBarInactiveTintColor: '#A0A0A0',
-        tabBarStyle: {
+        tabBarStyle: shouldHideTabBar ? { display: 'none' } : {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#F0F0F0',
           borderTopWidth: 1,
@@ -99,6 +105,24 @@ export default function AdminTabLayout() {
             />
           ),
           headerTitle: 'Admin Profile',
+        }}
+      />
+
+      {/* Hidden Screens (not shown in tab bar) */}
+      <Tabs.Screen
+        name="add-restaurant"
+        options={{
+          href: null, // Hide from tab bar
+          headerShown: false, // Uses custom header in the screen
+        }}
+      />
+
+      {/* Edit Restaurant (dynamic route) */}
+      <Tabs.Screen
+        name="edit-restaurant/[id]"
+        options={{
+          href: null, // Hide from tab bar
+          headerShown: false, // Uses custom header in the screen
         }}
       />
     </Tabs>

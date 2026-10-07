@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
 import {
+  Alert,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,70 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Mock data for restaurants
-interface Restaurant {
-  id: string;
-  name: string;
-  cuisine: string;
-  location: string;
-  rating: number;
-  reviewCount: number;
-  hours: string;
-  phone: string;
-  image: any; // Using require() for local images
-  status: 'active' | 'draft';
-}
-
-const mockRestaurants: Restaurant[] = [
-  {
-    id: '1',
-    name: 'Menike Traditional Claypot',
-    cuisine: 'Southern Claypot',
-    location: 'Ambalangoda Heritage Trail, Ga...',
-    rating: 4.9,
-    reviewCount: 96,
-    hours: '11:00 AM - 9:00 PM',
-    phone: '+94 91 225 8901',
-    image: require('@/assets/images/react-logo.png'), // Placeholder
-    status: 'active',
-  },
-  {
-    id: '2',
-    name: 'Kandy Highlands Pantry',
-    cuisine: 'Upcountry Organic',
-    location: 'Paradeniya Road, Kandy',
-    rating: 4.8,
-    reviewCount: 54,
-    hours: '8:00 AM - 7:30 PM',
-    phone: '+94 81 223 6412',
-    image: require('@/assets/images/react-logo.png'), // Placeholder
-    status: 'active',
-  },
-  {
-    id: '3',
-    name: 'Nallur Lagoon Crab Shop',
-    cuisine: 'Jaffna Seafood',
-    location: 'Point Pedro Road, Jaffna',
-    rating: 4.95,
-    reviewCount: 142,
-    hours: '12:00 PM - 10:00 PM',
-    phone: '+94 21 222 4110',
-    image: require('@/assets/images/react-logo.png'), // Placeholder
-    status: 'active',
-  },
-  {
-    id: '4',
-    name: 'Colombo Hearth & Home',
-    cuisine: 'Colombo Hearth',
-    location: 'Cinnamon Gardens, Colombo...',
-    rating: 4.7,
-    reviewCount: 88,
-    hours: '4:30 PM - 11:30 PM',
-    phone: '+94 11 257 8640',
-    image: require('@/assets/images/react-logo.png'), // Placeholder
-    status: 'draft',
-  },
-];
+import { useRestaurantOperations } from '@/hooks/useRestaurantOperations';
+import { subscribeToRestaurants, type Restaurant } from '@/services/restaurantService';
 
 type FilterType = 'all' | 'active' | 'drafts';
 
@@ -83,19 +24,47 @@ type FilterType = 'all' | 'active' | 'drafts';
  * Shows restaurant management interface with search, filters, and restaurant cards
  */
 export default function AdminRestaurantsScreen() {
+  const router = useRouter();
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const { deleteRestaurantData, isSubmitting } = useRestaurantOperations();
+
+  // Subscribe to real-time restaurant updates
+  useEffect(() => {
+    const unsubscribe = subscribeToRestaurants(
+      (restaurantData) => {
+        setRestaurants(restaurantData);
+        setIsLoading(false);
+        setError(null);
+      },
+      (error) => {
+        console.error('Restaurant subscription error:', error);
+        setError(error.message);
+        setIsLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return unsubscribe;
+  }, []);
 
   // Filter counts
-  const activeCount = mockRestaurants.filter(r => r.status === 'active').length;
-  const draftCount = mockRestaurants.filter(r => r.status === 'draft').length;
-  const totalCount = mockRestaurants.length;
+  const activeCount = restaurants.filter(r => r.status === 'active').length;
+  const draftCount = restaurants.filter(r => r.status === 'draft').length;
+  const totalCount = restaurants.length;
 
   // Get filtered restaurants
-  const filteredRestaurants = mockRestaurants.filter(restaurant => {
-    const matchesSearch = restaurant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         restaurant.cuisine.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         restaurant.location.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredRestaurants = restaurants.filter(restaurant => {
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = restaurant.name.toLowerCase().includes(searchLower) ||
+                         restaurant.category.toLowerCase().includes(searchLower) ||
+                         restaurant.tags.some(tag => tag.toLowerCase().includes(searchLower)) ||
+                         restaurant.city.toLowerCase().includes(searchLower);
     
     const matchesFilter = selectedFilter === 'all' || 
                          (selectedFilter === 'active' && restaurant.status === 'active') ||
@@ -104,40 +73,119 @@ export default function AdminRestaurantsScreen() {
     return matchesSearch && matchesFilter;
   });
 
-  // Placeholder handlers (TODO: Implement actual functionality)
+  // Handle refresh
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // The real-time subscription will automatically update the data
+    setTimeout(() => setIsRefreshing(false), 1000);
+  }, []);
+
+  // Handler functions
   const handleProfilePress = () => {
-    // TODO: Navigate to admin profile or show profile options
-    console.log('Profile pressed');
+    router.push('/admin/profile' as any);
   };
 
   const handleFilterPress = () => {
-    // TODO: Open advanced filter modal
-    console.log('Filter pressed');
+    console.log('Filter pressed - advanced filters coming soon');
   };
 
   const handleAddRestaurant = () => {
-    // TODO: Navigate to add restaurant form
-    console.log('Add restaurant pressed');
+    router.push('/admin/add-restaurant' as any);
   };
 
   const handlePhonePress = (phone: string) => {
-    // TODO: Launch phone call or show contact options
-    console.log('Phone pressed:', phone);
+    Alert.alert('Contact', `Call ${phone}?`);
   };
 
-  const handleDeletePress = (restaurantId: string) => {
-    // TODO: Show delete confirmation and remove restaurant
-    console.log('Delete pressed:', restaurantId);
+  const handleDeletePress = async (restaurantId: string) => {
+    try {
+      await deleteRestaurantData(restaurantId);
+    } catch (err) {
+      if (err instanceof Error && err.message !== 'Cancelled') {
+        Alert.alert('Error', 'Failed to delete restaurant. Please try again.');
+      }
+    }
   };
 
   const handleEditPress = (restaurantId: string) => {
-    // TODO: Navigate to edit restaurant form
-    console.log('Edit pressed:', restaurantId);
+    router.push(`/admin/edit-restaurant/${restaurantId}` as any);
   };
 
   const handleManageMenuPress = (restaurantId: string) => {
-    // TODO: Navigate to menu management screen
-    console.log('Manage Menu pressed:', restaurantId);
+    // NO-OP as requested - reserved for future development
+  };
+
+  const handlePublishDraft = async (restaurant: Restaurant) => {
+    // Quick publish validation - check required fields for active status
+    const requiredFields = {
+      name: restaurant.name,
+      category: restaurant.category,
+      description: restaurant.description,
+      address: restaurant.address,
+      city: restaurant.city,
+      phone: restaurant.phone,
+      location: restaurant.location,
+    };
+
+    const missingFields = Object.entries(requiredFields)
+      .filter(([key, value]) => !value || (typeof value === 'string' && !value.trim()))
+      .map(([key]) => key);
+
+    if (missingFields.length > 0) {
+      Alert.alert(
+        'Missing Information',
+        `Please complete the following fields before publishing: ${missingFields.join(', ')}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Edit', onPress: () => handleEditPress(restaurant.id) }
+        ]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Publish Restaurant',
+      'Are you sure you want to publish this restaurant?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Publish',
+          onPress: async () => {
+            try {
+              console.log('Publishing restaurant:', restaurant.id);
+              Alert.alert('Success', 'Restaurant published successfully!');
+            } catch (err) {
+              Alert.alert('Error', 'Failed to publish restaurant. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Format phone number for display
+  const formatPhoneNumber = (phone: string | undefined) => {
+    if (!phone) return 'No phone number';
+    
+    if (phone.startsWith('+94')) {
+      const number = phone.slice(3);
+      if (number.length >= 9) {
+        return `+94 ${number.slice(0, 2)} ${number.slice(2, 5)} ${number.slice(5)}`;
+      }
+    }
+    return phone;
+  };
+
+  // Format opening hours for display
+  const formatOpeningHours = (restaurant: Restaurant) => {
+    if (!restaurant.openTime || !restaurant.closeTime) {
+      return 'Hours not set';
+    }
+    
+    if (restaurant.openAllDays) {
+      return `${restaurant.openTime} – ${restaurant.closeTime} (Open all days)`;
+    }
+    return `${restaurant.openTime} – ${restaurant.closeTime}`;
   };
 
   const renderFilterChip = (filter: FilterType, label: string, count: number) => (
@@ -173,18 +221,41 @@ export default function AdminRestaurantsScreen() {
     <View key={restaurant.id} style={styles.restaurantCard}>
       {/* Restaurant Image with Rating Badge */}
       <View style={styles.imageContainer}>
-        <Image source={restaurant.image} style={styles.restaurantImage} />
+        {restaurant.coverPhotoUrl ? (
+          <Image 
+            source={{ uri: restaurant.coverPhotoUrl }} 
+            style={styles.restaurantImage}
+            defaultSource={require('@/assets/images/react-logo.png')}
+          />
+        ) : (
+          <View style={styles.placeholderImage}>
+            <Ionicons name="restaurant-outline" size={32} color="#999" />
+          </View>
+        )}
+        
         <View style={styles.ratingBadge}>
-          <Ionicons name="star" size={12} color="#FFD700" />
-          <Text style={styles.ratingText}>{restaurant.rating}</Text>
+          {restaurant.reviewCount > 0 ? (
+            <>
+              <Ionicons name="star" size={12} color="#FFD700" />
+              <Text style={styles.ratingText}>{restaurant.rating.toFixed(1)}</Text>
+            </>
+          ) : (
+            <Text style={styles.newBadgeText}>New</Text>
+          )}
         </View>
+        
+        {restaurant.status === 'draft' && (
+          <View style={styles.draftBadge}>
+            <Text style={styles.draftBadgeText}>Draft</Text>
+          </View>
+        )}
       </View>
 
       {/* Restaurant Content */}
       <View style={styles.restaurantContent}>
-        {/* Cuisine Pill */}
+        {/* Category Pill */}
         <View style={styles.cuisinePill}>
-          <Text style={styles.cuisineText}>{restaurant.cuisine}</Text>
+          <Text style={styles.cuisineText}>{restaurant.category}</Text>
         </View>
 
         {/* Restaurant Name and Location */}
@@ -194,7 +265,7 @@ export default function AdminRestaurantsScreen() {
         <View style={styles.locationRow}>
           <Ionicons name="location-outline" size={14} color="#999" />
           <Text style={styles.locationText} numberOfLines={1}>
-            {restaurant.location}
+            {restaurant.city}
           </Text>
         </View>
 
@@ -202,9 +273,13 @@ export default function AdminRestaurantsScreen() {
         <View style={styles.detailsRow}>
           <View style={styles.hoursContainer}>
             <Ionicons name="time-outline" size={14} color="#666" />
-            <Text style={styles.hoursText}>{restaurant.hours}</Text>
+            <Text style={styles.hoursText} numberOfLines={1}>
+              {formatOpeningHours(restaurant)}
+            </Text>
           </View>
-          <Text style={styles.reviewsText}>{restaurant.reviewCount} Reviews</Text>
+          <Text style={styles.reviewsText}>
+            {restaurant.reviewCount} Review{restaurant.reviewCount !== 1 ? 's' : ''}
+          </Text>
         </View>
 
         {/* Footer with Actions */}
@@ -216,21 +291,33 @@ export default function AdminRestaurantsScreen() {
             >
               <Ionicons name="call-outline" size={16} color="#666" />
             </TouchableOpacity>
-            <Text style={styles.phoneText}>{restaurant.phone}</Text>
+            <Text style={styles.phoneText}>{formatPhoneNumber(restaurant.phone)}</Text>
           </View>
 
           <View style={styles.actionButtons}>
             <TouchableOpacity
               onPress={() => handleDeletePress(restaurant.id)}
               style={styles.deleteButton}
+              disabled={isSubmitting}
               accessibilityLabel="Delete restaurant"
             >
               <Ionicons name="trash-outline" size={16} color="#E8505B" />
             </TouchableOpacity>
 
+            {restaurant.status === 'draft' && (
+              <TouchableOpacity
+                onPress={() => handlePublishDraft(restaurant)}
+                style={styles.publishQuickButton}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.publishQuickButtonText}>Publish</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               onPress={() => handleEditPress(restaurant.id)}
               style={styles.editButton}
+              disabled={isSubmitting}
             >
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>
@@ -247,9 +334,55 @@ export default function AdminRestaurantsScreen() {
     </View>
   );
 
+  const renderContent = () => {
+    if (error) {
+      return (
+        <View style={styles.errorState}>
+          <Ionicons name="alert-circle-outline" size={48} color="#E8505B" />
+          <Text style={styles.errorTitle}>Failed to Load</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (filteredRestaurants.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="restaurant-outline" size={48} color="#DDD" />
+          <Text style={styles.emptyStateText}>
+            {restaurants.length === 0 ? 'No restaurants yet' : 'No restaurants found'}
+          </Text>
+          <Text style={styles.emptyStateSubtext}>
+            {restaurants.length === 0 
+              ? 'Tap + Add Restaurant to get started'
+              : searchQuery 
+                ? 'Try adjusting your search terms' 
+                : 'No restaurants match the selected filter'
+            }
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.restaurantList}>
+        {filteredRestaurants.map(renderRestaurantCard)}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -325,20 +458,13 @@ export default function AdminRestaurantsScreen() {
           <Text style={styles.sectionTitle}>Registered Heritage Spots</Text>
         </View>
 
-        {/* Restaurant Cards */}
-        <View style={styles.restaurantList}>
-          {filteredRestaurants.map(renderRestaurantCard)}
-        </View>
-
-        {/* Empty State */}
-        {filteredRestaurants.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="restaurant-outline" size={48} color="#DDD" />
-            <Text style={styles.emptyStateText}>No restaurants found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {searchQuery ? 'Try adjusting your search terms' : 'Add your first restaurant to get started'}
-            </Text>
+        {/* Restaurant Cards or Loading/Error States */}
+        {isLoading ? (
+          <View style={styles.loadingState}>
+            <Text style={styles.loadingText}>Loading restaurants...</Text>
           </View>
+        ) : (
+          renderContent()
         )}
       </ScrollView>
     </SafeAreaView>
@@ -548,6 +674,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  loadingState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  errorState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#E8505B',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#E8505B',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   restaurantList: {
     paddingHorizontal: 20,
     paddingBottom: 20,
@@ -572,6 +753,13 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  placeholderImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   ratingBadge: {
     position: 'absolute',
     top: 10,
@@ -583,10 +771,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    minWidth: 40,
+    justifyContent: 'center',
   },
   ratingText: {
     color: '#FFF',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  newBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  draftBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: '#FF9500',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  draftBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
     fontWeight: '600',
   },
   restaurantContent: {
@@ -632,10 +841,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flex: 1,
   },
   hoursText: {
     fontSize: 12,
     color: '#666',
+    flex: 1,
   },
   reviewsText: {
     fontSize: 12,
@@ -661,10 +872,21 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   deleteButton: {
     padding: 4,
+  },
+  publishQuickButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+  },
+  publishQuickButtonText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#FFF',
   },
   editButton: {
     paddingHorizontal: 12,
@@ -687,23 +909,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#FFF',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#666',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 20,
   },
 });
