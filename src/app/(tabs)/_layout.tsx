@@ -2,6 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs, router } from 'expo-router';
 import { Image, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 
+function HeaderRight({ showNotification = true }: { showNotification?: boolean }) {
+  return (
+    <View style={styles.headerRight}>
+      {showNotification && (
+        <TouchableOpacity style={styles.iconButton}>
+          <Ionicons name="notifications-outline" size={24} color="#333" />
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity
+        style={styles.profileButton}
+        onPress={() => router.push('/(tabs)/profile')}
+      >
+        <Ionicons name="person-circle" size={32} color="#E8505B" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 /**
  * Tab layout for the main authenticated app
  * Contains: Home, Discover, Add Recipe (elevated), Favourites, and Profile tabs
@@ -50,19 +68,7 @@ export default function TabLayout() {
             />
           </View>
         ),
-        headerRight: () => (
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.iconButton}>
-              <Ionicons name="notifications-outline" size={24} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.profileButton}
-              onPress={() => router.push('/(tabs)/profile')}
-            >
-              <Ionicons name="person-circle" size={32} color="#E8505B" />
-            </TouchableOpacity>
-          </View>
-        ),
+        headerRight: () => <HeaderRight />,
       }}
     >
       {/* Home Tab */}
@@ -93,7 +99,8 @@ export default function TabLayout() {
               color={color} 
             />
           ),
-          headerTitle: '',
+          headerTitle: '', // Use same empty title as Home
+          headerRight: () => <HeaderRight showNotification={false} />,
         }}
       />
 
