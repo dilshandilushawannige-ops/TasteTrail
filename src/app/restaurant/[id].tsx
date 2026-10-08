@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WriteReviewSheet } from '@/components/reviews/WriteReviewSheet';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
 import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
+import { useSavedRestaurants } from '@/hooks/useSavedRestaurants';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -575,8 +576,10 @@ export default function RestaurantDetailsScreen() {
                 <Text style={styles.emptyStateText}>No reviews yet</Text>
                 <Text style={styles.emptyStateSubtext}>Be the first to review</Text>
               </View>}
-              {reviews.map(review => <ReviewCard key={review.id} review={review} signatureDish={restaurant?.signatureDish}
-                restaurantName={restaurant?.name} restaurantPhoto={restaurant?.coverPhotoUrl} restaurantDescription={restaurant?.description} />)}
+              {reviews.length > 0 && <View style={styles.reviewFeed}>
+                {reviews.map(review => <ReviewCard key={review.id} review={review} signatureDish={restaurant?.signatureDish}
+                  restaurantName={restaurant?.name} restaurantPhoto={restaurant?.coverPhotoUrl} restaurantDescription={restaurant?.description} />)}
+              </View>}
               <TouchableOpacity style={styles.writeReviewButton} onPress={() => setWriteReviewVisible(true)}>
                 <Text style={styles.writeReviewText}>Write a review</Text>
               </TouchableOpacity>
@@ -882,6 +885,13 @@ const styles = StyleSheet.create({
   // Tab Content
   tabContent: {
     gap: 10,
+  },
+  reviewFeed: {
+    backgroundColor: '#F6F7FB',
+    borderRadius: 22,
+    marginHorizontal: -8,
+    padding: 8,
+    gap: 14,
   },
   description: {
     fontSize: 14,

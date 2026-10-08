@@ -98,7 +98,18 @@ export function ReviewCard({ review, signatureDish, restaurantName = 'Restaurant
   );
 }
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#FFF', borderRadius: 17, padding: 16, marginBottom: 12 },
+  container: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EDF0F6',
+    padding: 16,
+    shadowColor: '#23314D',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20 },
   avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F65B73', alignItems: 'center', justifyContent: 'center' },
