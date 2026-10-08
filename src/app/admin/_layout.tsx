@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname } from 'expo-router';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Admin tab layout for the admin dashboard
@@ -8,6 +9,9 @@ import { Platform } from 'react-native';
  */
 export default function AdminTabLayout() {
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const baseTabBarHeight = Platform.OS === 'ios' ? 85 : 65;
+  const baseTabBarPadding = Platform.OS === 'ios' ? 25 : 10;
   
   // Hide tab bar when on forms or other modal-like screens
   const shouldHideTabBar = pathname?.includes('/add-restaurant') || 
@@ -23,8 +27,11 @@ export default function AdminTabLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: '#F0F0F0',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 85 : 65,
-          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+          // Lift the bar above Android's gesture/navigation area instead of
+          // extending the bar into the system navigation surface.
+          bottom: Platform.OS === 'android' ? insets.bottom : 0,
+          height: baseTabBarHeight,
+          paddingBottom: baseTabBarPadding,
           paddingTop: 10,
           elevation: 8,
           shadowColor: '#000',
@@ -57,7 +64,7 @@ export default function AdminTabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Admin Overview',
+          headerShown: false, // Using custom header in the screen
         }}
       />
 
@@ -105,7 +112,7 @@ export default function AdminTabLayout() {
               color={color} 
             />
           ),
-          headerTitle: 'Admin Profile',
+          headerShown: false, // Using custom header in the screen
         }}
       />
 
