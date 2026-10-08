@@ -2,6 +2,11 @@
  * Review types and interfaces
  */
 
+export interface ReviewMedia {
+  url: string;
+  type: 'image' | 'video';
+}
+
 export interface Review {
   id: string;
   restaurantId: string;
@@ -12,6 +17,12 @@ export interface Review {
   comment: string;
   createdAt: Date;
   updatedAt?: Date;
+  diningType?: string;
+  mealTime?: string;
+  visitedWith?: string;
+  anonymous?: boolean;
+  media?: ReviewMedia[];
+  helpfulUserIds?: string[];
 }
 
 export interface RatingSummary {
@@ -27,4 +38,6 @@ export interface RatingSummary {
 }
 
 export type CreateReviewData = Omit<Review, 'id' | 'createdAt' | 'updatedAt'>;
-export type UpdateReviewData = Partial<Pick<Review, 'rating' | 'comment'>>;
+export type UpdateReviewData = Partial<Pick<Review,
+  'rating' | 'comment' | 'diningType' | 'mealTime' | 'visitedWith' | 'anonymous' | 'media'
+>>;

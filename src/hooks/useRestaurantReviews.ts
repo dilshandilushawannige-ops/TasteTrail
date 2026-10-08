@@ -1,90 +1,30 @@
-/**
- * Hook for managing restaurant reviews
- */
-
-import { useState, useEffect, useCallback } from 'react';
-import { Review, RatingSummary, CreateReviewData } from '@/types/review';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Review, CreateReviewData } from '@/types/review';
 import * as reviewService from '@/services/reviewService';
 
-export interface UseRestaurantReviewsReturn {
-  reviews: Review[];
-  summary: RatingSummary | null;
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-  submitReview: (review: CreateReviewData) => Promise<void>;
-}
-
-export function useRestaurantReviews(restaurantId: string): UseRestaurantReviewsReturn {
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [summary, setSummary] = useState<RatingSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load reviews and summary
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Load reviews and summary in parallel
-      const [reviewsData, summaryData] = await Promise.all([
-        reviewService.getReviewsByRestaurant(restaurantId),
-        reviewService.getRatingSummary(restaurantId),
-      ]);
-
-      setReviews(reviewsData);
-      setSummary(summaryData);
-    } catch (err) {
-      console.error('Error loading reviews:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load reviews');
-    } finally {
-      setLoading(false);
-    }
-  }, [restaurantId]);
-
-  // Submit a new review
-  const submitReview = useCallback(async (reviewData: CreateReviewData) => {
-    try {
-      await reviewService.addReview(reviewData);
-      // Refresh data after successful submission
-      await loadData();
-    } catch (err) {
-      console.error('Error submitting review:', err);
-      throw err;
-    }
-  }, [loadData]);
-
-  // Refresh data
-  const refresh = useCallback(async () => {
-    await loadData();
-  }, [loadData]);
-
-  // Load data on mount and subscribe to updates
+export function useRestaurantReviews(restaurantId: string) {
+  const [items, setItems] = useState<Review[]>([]);
+  const [loadedRestaurant, setLoadedRestaurant] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ restaurantId: string; message: string } | null>(null);
+  const reviews = useMemo(() => items.filter(item => item.restaurantId === restaurantId), [items, restaurantId]);
+  const summary = useMemo(() => reviewService.summarizeReviews(reviews), [reviews]);
+  const error = failure?.restaurantId === restaurantId ? failure.message : null;
+  const loading = !!restaurantId && loadedRestaurant !== restaurantId && !error;
   useEffect(() => {
-    // Subscribe to real-time updates
-    const unsubscribe = reviewService.subscribeToReviews(restaurantId, (updatedReviews) => {
-      setReviews(updatedReviews);
-      setLoading(false);
-    });
-
-    // Load summary separately (not real-time)
-    reviewService.getRatingSummary(restaurantId)
-      .then(setSummary)
-      .catch((err) => {
-        console.error('Error loading summary:', err);
-        setError('Failed to load rating summary');
-      });
-
-    return unsubscribe;
+    if (!restaurantId) return;
+    return reviewService.subscribeToReviews(restaurantId, updated => {
+      setItems(updated); setLoadedRestaurant(restaurantId); setFailure(null);
+    }, err => { setFailure({ restaurantId, message: err.message }); });
   }, [restaurantId]);
-
-  return {
-    reviews,
-    summary,
-    loading,
-    error,
-    refresh,
-    submitReview,
-  };
+  const refresh = useCallback(async () => {
+    try {
+      setItems(await reviewService.getReviewsByRestaurant(restaurantId));
+      setLoadedRestaurant(restaurantId); setFailure(null);
+    } catch (err) { setFailure({ restaurantId, message: reviewService.reviewErrorMessage(err) }); }
+  }, [restaurantId]);
+  const submitReview = useCallback(async (data: CreateReviewData) => {
+    await reviewService.addReview(data);
+    // The live subscription supplies the saved review and its uploaded media.
+  }, []);
+  return { reviews, summary, loading, error, refresh, submitReview };
 }
