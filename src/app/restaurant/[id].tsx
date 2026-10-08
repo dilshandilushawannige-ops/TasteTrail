@@ -29,6 +29,8 @@ import { db } from '@/firebaseConfig';
 import { Restaurant, getRestaurantFromCache } from '@/services/restaurantService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WriteReviewSheet } from '@/components/reviews/WriteReviewSheet';
+import { ReviewCard } from '@/components/reviews/ReviewCard';
+import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -44,6 +46,7 @@ export default function RestaurantDetailsScreen() {
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [imageModalIndex, setImageModalIndex] = useState(0);
   const [writeReviewVisible, setWriteReviewVisible] = useState(false);
+  const { reviews, loading: reviewsLoading, error: reviewsError, refresh: refreshReviews, submitReview } = useRestaurantReviews(id || '');
 
   useFocusEffect(
     React.useCallback(() => {
@@ -562,11 +565,17 @@ export default function RestaurantDetailsScreen() {
           )}
           {activeTab === 'reviews' && (
             <View style={styles.tabContent}>
-              <View style={styles.emptyState}>
+              {reviewsLoading && <ActivityIndicator color="#B5213B" style={{ marginVertical: 24 }} />}
+              {reviewsError && <View style={styles.emptyState}>
+                <Text accessibilityRole="alert" style={styles.emptyStateSubtext}>{reviewsError}</Text>
+                <TouchableOpacity onPress={refreshReviews}><Text style={{ color: '#B5213B' }}>Retry</Text></TouchableOpacity>
+              </View>}
+              {!reviewsLoading && !reviewsError && reviews.length === 0 && <View style={styles.emptyState}>
                 <Ionicons name="chatbubble-outline" size={48} color="#6B7488" />
                 <Text style={styles.emptyStateText}>No reviews yet</Text>
                 <Text style={styles.emptyStateSubtext}>Be the first to review</Text>
-              </View>
+              </View>}
+              {reviews.map(review => <ReviewCard key={review.id} review={review} signatureDish={restaurant?.signatureDish} />)}
               <TouchableOpacity style={styles.writeReviewButton} onPress={() => setWriteReviewVisible(true)}>
                 <Text style={styles.writeReviewText}>Write a review</Text>
               </TouchableOpacity>
@@ -579,6 +588,10 @@ export default function RestaurantDetailsScreen() {
         key={id}
         visible={writeReviewVisible}
         onClose={() => setWriteReviewVisible(false)}
+        onSubmit={async data => {
+          await submitReview(data);
+          setActiveTab('reviews');
+        }}
         restaurantId={id || ''}
         restaurantName={restaurant?.name || 'Restaurant'}
         restaurantPhoto={restaurant?.coverPhotoUrl}

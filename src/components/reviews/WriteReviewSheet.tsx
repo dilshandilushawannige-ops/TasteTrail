@@ -5,13 +5,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth } from '@/firebaseConfig';
 import { CreateReviewData } from '@/types/review';
+import { uploadReviewMedia } from '@/services/reviewMediaService';
+import type { ReviewMedia } from '@/types/review';
 
 export interface ReviewFormData extends CreateReviewData {
   diningType: string;
   mealTime: string;
   visitedWith: string;
   anonymous: boolean;
-  media: ImagePicker.ImagePickerAsset[];
+  media: ReviewMedia[];
 }
 interface WriteReviewSheetProps {
   visible: boolean;
@@ -31,6 +33,7 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
   const inputRef = useRef<TextInput>(null);
   const pickingRef = useRef(false);
   const submittingRef = useRef(false);
+  const uploadedMediaRef = useRef(new Map<string, ReviewMedia>());
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [diningType, setDiningType] = useState('Dine-in');
@@ -76,11 +79,18 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
     if (!user) { showFeedback('Sign in required', 'Please sign in before submitting your review.'); return; }
     submittingRef.current = true; setSubmitting(true);
     try {
-      await onSubmit({ restaurantId, userId: user.uid, userName: anonymous ? 'Anonymous' : user.displayName || 'TasteTrail member', rating, comment: comment.trim(), diningType, mealTime, visitedWith, anonymous, media });
+      for (const asset of media) {
+        if (!uploadedMediaRef.current.has(asset.uri)) {
+          uploadedMediaRef.current.set(asset.uri, await uploadReviewMedia(asset));
+        }
+      }
+      const uploadedMedia = media.map(asset => uploadedMediaRef.current.get(asset.uri)!);
+      await onSubmit({ restaurantId, userId: user.uid, userName: anonymous ? 'Anonymous' : user.displayName || 'TasteTrail member', rating, comment: comment.trim(), diningType, mealTime, visitedWith, anonymous, media: uploadedMedia });
+      uploadedMediaRef.current.clear();
       setRating(0); setComment(''); setMedia([]); setAnonymous(false);
       showFeedback('Review submitted', 'Thank you for sharing your experience!');
       onClose();
-    } catch { showFeedback('Unable to submit', 'Your draft is still here. Please try again.'); }
+    } catch (error) { showFeedback('Unable to submit', error instanceof Error ? error.message : 'Your draft is still here. Please try again.'); }
     finally { submittingRef.current = false; setSubmitting(false); }
   };
   const choices = (label: string, options: string[], value: string, select: (value: string) => void) => (
