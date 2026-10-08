@@ -1,11 +1,11 @@
 import { auth, db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { deleteUser, EmailAuthProvider, reauthenticateWithCredential, signOut, updateProfile } from 'firebase/auth';
+import { deleteUser, EmailAuthProvider, reauthenticateWithCredential, signOut, updatePassword, updateProfile, verifyBeforeUpdateEmail } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Linking, Modal, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity,
   useWindowDimensions, View,
 } from 'react-native';
@@ -17,30 +17,40 @@ interface Props {
 
 export default function AccountSettingsButton({ onProfileUpdated }: Props) {
   const [visible, setVisible] = useState(false);
-  const [page, setPage] = useState<'menu' | 'profile' | 'delete'>('menu');
+  const [page, setPage] = useState<'menu' | 'profile' | 'password' | 'email' | 'notifications' | 'language' | 'delete'>('menu');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
   const [slide] = useState(() => new Animated.Value(0));
   const { width } = useWindowDimensions();
   const panelWidth = Math.min(340, width * 0.88);
   const insets = useSafeAreaInsets();
+  const titles = { menu: 'Account settings', profile: 'Edit profile', password: 'Change password', email: 'Email address', notifications: 'Notifications', language: 'Language', delete: 'Delete account' };
+
+  const clearCredentials = () => { setPassword(''); setNewPassword(''); setConfirmPassword(''); };
+  const navigate = (nextPage: typeof page) => {
+    setError(''); setMessage(''); clearCredentials();
+    setEmail(auth.currentUser?.email || '');
+    setPage(nextPage);
+  };
 
   const close = () => {
     if (busy) return;
     Animated.timing(slide, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
       setVisible(false);
-      setPassword('');
+      clearCredentials();
     });
   };
 
   const open = () => {
-    setPage('menu');
-    setError('');
-    setPassword('');
+    navigate('menu');
     slide.setValue(0);
     setVisible(true);
   };
@@ -102,6 +112,47 @@ export default function AccountSettingsButton({ onProfileUpdated }: Props) {
     }
   };
 
+  const saveSecurity = async () => {
+    const user = auth.currentUser;
+    if (!user?.email || busy) return;
+    if (!password) { setError('Enter your current password.'); return; }
+    if (page === 'password' && (newPassword.length < 6 || newPassword !== confirmPassword)) {
+      setError(newPassword.length < 6 ? 'Use at least 6 characters for your new password.' : 'The new passwords do not match.'); return;
+    }
+    if (page === 'email' && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.trim().toLowerCase() === user.email.toLowerCase())) {
+      setError('Enter a different valid email address.'); return;
+    }
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+      if (page === 'password') {
+        await updatePassword(user, newPassword);
+        setMessage('Your password has been updated.');
+      } else {
+        await verifyBeforeUpdateEmail(user, email.trim());
+        setMessage('Check your new email address for a verification link. Your registered email changes after verification.');
+      }
+      clearCredentials();
+    } catch (cause) {
+      const code = (cause as { code?: string }).code;
+      setError(code === 'auth/invalid-credential' || code === 'auth/wrong-password'
+        ? 'Incorrect current password. Please try again.'
+        : code === 'auth/email-already-in-use' ? 'That email address is already in use.'
+        : code === 'auth/too-many-requests' ? 'Too many attempts. Please try again later.'
+        : 'Could not update your account. Please try again.');
+    } finally { setBusy(false); }
+  };
+
+  const menuRow = (icon: React.ComponentProps<typeof Ionicons>['name'], title: string, subtitle: string, onPress: () => void, danger = false) => (
+    <TouchableOpacity style={styles.menuItem} onPress={onPress} disabled={busy} accessibilityRole="button" accessibilityLabel={title}>
+      <Ionicons name={icon} size={18} color={danger ? '#E53935' : '#666'} />
+      <View style={styles.menuCopy}>
+        <Text style={[styles.menuText, danger && styles.danger]}>{title}</Text>
+        <Text style={styles.menuSubtitle}>{subtitle}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   const removeAccount = async () => {
     const user = auth.currentUser;
     if (!user?.email || busy) return;
@@ -160,7 +211,7 @@ export default function AccountSettingsButton({ onProfileUpdated }: Props) {
             transform: [{ translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [panelWidth, 0] }) }],
           }]}>
             <View style={styles.headingRow}>
-              <Text style={styles.heading}>{page === 'menu' ? 'Account settings' : page === 'profile' ? 'Update profile' : 'Delete account'}</Text>
+              <Text style={styles.heading}>{titles[page]}</Text>
               <TouchableOpacity onPress={close} disabled={busy} hitSlop={8}
                 accessibilityRole="button" accessibilityLabel="Close account settings">
                 <Ionicons name="close" size={24} color="#333" />
@@ -170,16 +221,16 @@ export default function AccountSettingsButton({ onProfileUpdated }: Props) {
               <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
                 {page === 'menu' ? (
                   <>
-                    <TouchableOpacity style={styles.menuItem} onPress={logout} disabled={busy} accessibilityRole="button">
-                      <Ionicons name="log-out-outline" size={22} color="#333" /><Text style={styles.menuText}>Log out</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuItem} onPress={editProfile} disabled={busy} accessibilityRole="button">
-                      <Ionicons name="person-outline" size={22} color="#333" /><Text style={styles.menuText}>Update profile</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuItem} disabled={busy} accessibilityRole="button"
-                      onPress={() => { setError(''); setPassword(''); setPage('delete'); }}>
-                      <Ionicons name="trash-outline" size={22} color="#E8505B" /><Text style={[styles.menuText, styles.danger]}>Delete account</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.sectionTitle}>PROFILE & ACCOUNT</Text>
+                    {menuRow('person-outline', 'Edit profile', 'Change name, bio and location', editProfile)}
+                    {menuRow('lock-closed-outline', 'Change password', 'Update account security', () => navigate('password'))}
+                    {menuRow('mail-outline', 'Email address', 'Manage registered email', () => navigate('email'))}
+                    <Text style={styles.sectionTitle}>PREFERENCES</Text>
+                    {menuRow('notifications-outline', 'Notifications', 'Manage recipe alerts', () => navigate('notifications'))}
+                    {menuRow('language-outline', 'Language', 'Choose app language', () => navigate('language'))}
+                    <Text style={styles.sectionTitle}>ACCOUNT ACTIONS</Text>
+                    {menuRow('log-out-outline', 'Log out', 'Sign out of TasteTrail', logout)}
+                    {menuRow('trash-outline', 'Delete account', 'Permanently remove your account', () => navigate('delete'), true)}
                   </>
                 ) : page === 'profile' ? (
                   <>
@@ -193,6 +244,37 @@ export default function AccountSettingsButton({ onProfileUpdated }: Props) {
                       <Text style={styles.actionText}>Save changes</Text>
                     </TouchableOpacity>
                   </>
+                ) : page === 'password' || page === 'email' ? (
+                  <>
+                    {page === 'email' && <>
+                      <Text style={styles.description}>Registered email: {auth.currentUser?.email || 'No email address'}</Text>
+                      <Text style={styles.label}>New email address</Text>
+                      <TextInput style={styles.input} value={email} onChangeText={setEmail} editable={!busy} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} accessibilityLabel="New email address" />
+                    </>}
+                    <Text style={styles.label}>Current password</Text>
+                    <TextInput style={styles.input} value={password} onChangeText={setPassword} editable={!busy} secureTextEntry autoCapitalize="none" autoCorrect={false} accessibilityLabel="Current password" />
+                    {page === 'password' && <>
+                      <Text style={styles.label}>New password</Text>
+                      <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword} editable={!busy} secureTextEntry autoCapitalize="none" autoCorrect={false} accessibilityLabel="New password" />
+                      <Text style={styles.label}>Confirm new password</Text>
+                      <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} editable={!busy} secureTextEntry autoCapitalize="none" autoCorrect={false} accessibilityLabel="Confirm new password" />
+                    </>}
+                    <TouchableOpacity style={styles.action} disabled={busy} onPress={saveSecurity} accessibilityRole="button">
+                      <Text style={styles.actionText}>{page === 'password' ? 'Update password' : 'Verify new email'}</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : page === 'notifications' ? (
+                  <>
+                    <Text style={styles.description}>Recipe alerts are not available yet. You can manage TasteTrail permissions in your device settings.</Text>
+                    {Platform.OS !== 'web' && <TouchableOpacity style={styles.action} accessibilityRole="button" onPress={() => Linking.openSettings().catch(() => setError('Could not open device settings.'))}>
+                      <Text style={styles.actionText}>Open device settings</Text>
+                    </TouchableOpacity>}
+                  </>
+                ) : page === 'language' ? (
+                  <>
+                    <View style={styles.languageRow}><Text style={styles.menuText}>English</Text><Ionicons name="checkmark" size={20} color="#666" /></View>
+                    <Text style={styles.description}>TasteTrail currently supports English. More app languages are not available yet.</Text>
+                  </>
                 ) : (
                   <>
                     <Text style={styles.description}>This permanently deletes your account, profile, and saved favourites. Enter your password, then confirm below.</Text>
@@ -205,10 +287,11 @@ export default function AccountSettingsButton({ onProfileUpdated }: Props) {
                   </>
                 )}
                 {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+                {!!message && <Text style={styles.success} accessibilityRole="alert">{message}</Text>}
                 {busy && <ActivityIndicator style={styles.spinner} color="#E8505B" />}
                 {page !== 'menu' && (
                   <TouchableOpacity style={styles.back} disabled={busy} accessibilityRole="button"
-                    onPress={() => { setPage('menu'); setError(''); setPassword(''); }}>
+                    onPress={() => navigate('menu')}>
                     <Text style={styles.backText}>Back to settings</Text>
                   </TouchableOpacity>
                 )}
@@ -224,14 +307,19 @@ export default function AccountSettingsButton({ onProfileUpdated }: Props) {
 const styles = StyleSheet.create({
   settingsButton: { marginRight: 16 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'flex-end' },
-  panel: { flex: 1, backgroundColor: '#FFF', paddingHorizontal: 20 },
+  panel: { flex: 1, backgroundColor: '#F4F4F4', paddingHorizontal: 16, borderLeftWidth: 1, borderLeftColor: '#DDD' },
   headingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  heading: { flex: 1, fontSize: 20, fontWeight: 'bold', color: '#1A1A1A' },
+  heading: { flex: 1, fontSize: 18, fontWeight: '600', color: '#1A1A1A' },
   content: { flex: 1 },
-  body: { paddingTop: 16, paddingBottom: 24 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  menuText: { fontSize: 16, color: '#333' },
-  danger: { color: '#E8505B' },
+  body: { paddingTop: 4, paddingBottom: 24 },
+  sectionTitle: { fontSize: 10, fontWeight: '600', color: '#909090', marginTop: 20, marginBottom: 4, paddingHorizontal: 8 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 72, paddingHorizontal: 8, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E4E4E4' },
+  menuCopy: { flex: 1, gap: 4 },
+  menuText: { fontSize: 14, fontWeight: '500', color: '#202020' },
+  menuSubtitle: { fontSize: 12, lineHeight: 18, color: '#666' },
+  danger: { color: '#E53935' },
+  languageRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 20 },
+  success: { color: '#287447', fontSize: 14, lineHeight: 21, marginTop: 16 },
   label: { fontSize: 14, color: '#333', fontWeight: '600', marginTop: 12, marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#DDD', borderRadius: 10, padding: 12, fontSize: 16, color: '#1A1A1A', backgroundColor: '#FAFAF7' },
   bio: { minHeight: 90, textAlignVertical: 'top' },
