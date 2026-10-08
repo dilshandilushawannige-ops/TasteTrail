@@ -112,7 +112,7 @@ export default function AdminRestaurantsScreen() {
   };
 
   const handleManageMenuPress = (restaurantId: string) => {
-    // NO-OP as requested - reserved for future development
+    router.push(`/admin/restaurant/${restaurantId}/menu` as any);
   };
 
   const handlePublishDraft = async (restaurant: Restaurant) => {
