@@ -1,11 +1,10 @@
-import { auth, db } from '@/firebaseConfig';
+import { db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { collection, deleteDoc, doc, getDocs, orderBy, query, setDoc } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -15,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSavedRecipes } from '@/hooks/useSavedRecipes';
 
 interface Recipe {
   id: string;
@@ -52,9 +52,17 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [bookmarkedRecipes, setBookmarkedRecipes] = useState<Set<string>>(new Set());
+  const [saveToast, setSaveToast] = useState('');
+  const { isSaved, toggle } = useSavedRecipes();
 
-  const user = auth.currentUser;
+  const toggleRecipe = async (recipeId: string) => {
+    const wasSaved = isSaved(recipeId);
+    const updated = await toggle(recipeId);
+    if (updated) {
+      setSaveToast(wasSaved ? 'Removed from favourites' : 'Saved to favourites');
+      setTimeout(() => setSaveToast(''), 1600);
+    }
+  };
 
   const fetchRecipes = async () => {
     try {
@@ -81,10 +89,6 @@ export default function HomeScreen() {
       });
       setCreators(Array.from(uniqueCreators.values()).slice(0, 5));
 
-      // Fetch user's bookmarked recipes
-      if (user) {
-        await fetchBookmarks();
-      }
     } catch (error) {
       console.error('Error fetching recipes:', error);
     } finally {
@@ -93,60 +97,9 @@ export default function HomeScreen() {
     }
   };
 
-  const fetchBookmarks = async () => {
-    if (!user) return;
-    
-    try {
-      const bookmarksQuery = query(collection(db, 'users', user.uid, 'favourites'));
-      const querySnapshot = await getDocs(bookmarksQuery);
-      
-      const bookmarked = new Set<string>();
-      querySnapshot.forEach((doc) => {
-        bookmarked.add(doc.id);
-      });
-      setBookmarkedRecipes(bookmarked);
-    } catch (error) {
-      console.error('Error fetching bookmarks:', error);
-    }
-  };
-
-  const toggleBookmark = async (recipeId: string) => {
-    if (!user) {
-      Alert.alert('Login Required', 'Please login to save recipes to favorites');
-      return;
-    }
-
-    try {
-      const bookmarkRef = doc(db, 'users', user.uid, 'favourites', recipeId);
-      
-      if (bookmarkedRecipes.has(recipeId)) {
-        // Remove from favorites
-        await deleteDoc(bookmarkRef);
-        setBookmarkedRecipes((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(recipeId);
-          return newSet;
-        });
-      } else {
-        // Add to favorites
-        const recipe = recipes.find((r) => r.id === recipeId);
-        if (recipe) {
-          await setDoc(bookmarkRef, {
-            recipeId: recipe.id,
-            recipeName: recipe.name,
-            recipeImage: recipe.imageUrl || null,
-            savedAt: new Date(),
-          });
-          setBookmarkedRecipes((prev) => new Set(prev).add(recipeId));
-        }
-      }
-    } catch (error) {
-      console.error('Error toggling bookmark:', error);
-      Alert.alert('Error', 'Failed to update favorites');
-    }
-  };
-
   useEffect(() => {
+    // Initial recipe loading synchronizes the screen with Firestore.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchRecipes();
   }, []);
 
@@ -178,7 +131,8 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView
+    <>
+      <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       refreshControl={
@@ -242,12 +196,15 @@ export default function HomeScreen() {
 
             <TouchableOpacity 
               style={styles.bookmarkButtonWhite}
-              onPress={() => toggleBookmark(trendingRecipe.id)}
+              onPress={(event) => {
+                event.stopPropagation();
+                void toggleRecipe(trendingRecipe.id);
+              }}
             >
               <Ionicons 
-                name={bookmarkedRecipes.has(trendingRecipe.id) ? 'bookmark' : 'bookmark-outline'} 
+                name={isSaved(trendingRecipe.id) ? 'bookmark' : 'bookmark-outline'}
                 size={22} 
-                color={bookmarkedRecipes.has(trendingRecipe.id) ? '#E8505B' : '#333'} 
+                color={isSaved(trendingRecipe.id) ? '#E8505B' : '#333'}
               />
             </TouchableOpacity>
 
@@ -330,8 +287,13 @@ export default function HomeScreen() {
               </Text>
               <View style={styles.categoryCardFooter}>
                 <Text style={styles.categoryCardTime}>TIME</Text>
-                <TouchableOpacity>
-                  <Ionicons name="bookmark-outline" size={16} color="#999" />
+                <TouchableOpacity
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    void toggleRecipe(recipe.id);
+                  }}
+                >
+                  <Ionicons name={isSaved(recipe.id) ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved(recipe.id) ? '#E8505B' : '#999'} />
                 </TouchableOpacity>
               </View>
               <Text style={styles.categoryCardDuration}>25 Mins</Text>
@@ -420,7 +382,9 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.bottomSpacer} />
-    </ScrollView>
+      </ScrollView>
+      {saveToast ? <View style={styles.saveToast}><Ionicons name="bookmark" size={15} color="#FFF" /><Text style={styles.saveToastText}>{saveToast}</Text></View> : null}
+    </>
   );
 }
 
@@ -848,5 +812,22 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 20,
+  },
+  saveToast: {
+    position: 'absolute',
+    bottom: 28,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#1F2937',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  saveToastText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
