@@ -1,6 +1,6 @@
 import { auth, db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
@@ -27,6 +27,7 @@ type GenderFilter = typeof genderFilters[number];
 type InfoPanel = { title: string; message?: string; userId?: string } | null;
 
 export default function AdminUsersScreen() {
+  const router = useRouter();
   const [users, setUsers] = useState<SignupUser[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -147,17 +148,26 @@ export default function AdminUsersScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Tabs.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
-        <Text style={styles.title}>Users</Text>
-        <TouchableOpacity style={styles.headerIcon} hitSlop={8} disabled={!ready}
-          onPress={() => setTodayOnly(value => !value)} accessibilityRole="button"
-          accessibilityLabel={todayOnly ? 'Show all users' : 'Show today’s sign-ups'} accessibilityState={{ selected: todayOnly }}>
-          <Ionicons name={todayOnly ? 'notifications' : 'notifications-outline'} size={23} color={todayOnly ? '#E8505B' : '#71829D'} />
-          {ready && newToday > 0 && <View style={styles.notificationDot} />}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.addButton} accessibilityRole="button" accessibilityLabel="Add user information"
-          onPress={() => setInfo({ title: 'Add a user', message: 'New users can create an account from the sign-up page. Their details appear here automatically after registration.' })}>
-          <Ionicons name="add" size={25} color="#FFF" />
-        </TouchableOpacity>
+        <View style={styles.headerLeft}>
+          <View style={styles.adminBadge}>
+            <Ionicons name="shield-checkmark" size={16} color="#E8505B" />
+            <Text style={styles.adminText}>ADMIN CONSOLE</Text>
+          </View>
+          <Text style={styles.title}>Users</Text>
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerIcon} hitSlop={8} disabled={!ready}
+            onPress={() => setTodayOnly(value => !value)} accessibilityRole="button"
+            accessibilityLabel={todayOnly ? 'Show all users' : 'Show today’s sign-ups'} accessibilityState={{ selected: todayOnly }}>
+            <Ionicons name={todayOnly ? 'notifications' : 'notifications-outline'} size={23} color={todayOnly ? '#E8505B' : '#71829D'} />
+            {ready && newToday > 0 && <View style={styles.notificationDot} />}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.profileButton} accessibilityRole="button" accessibilityLabel="Admin profile"
+            onPress={() => router.push('/admin/profile' as any)}>
+            <Ionicons name="person-circle" size={32} color="#E8505B" />
+            <View style={styles.profileStatusDot} />
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -312,11 +322,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F7F8FA',
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF' },
-  title: { flex: 1, fontSize: 24, fontWeight: 'bold', color: '#E8505B' },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, backgroundColor: '#FFF' },
+  headerLeft: { flex: 1 },
+  adminBadge: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  adminText: { fontSize: 12, fontWeight: '600', color: '#333', marginLeft: 6, letterSpacing: 0.5 },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#333' },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerIcon: { position: 'relative', padding: 4 },
   notificationDot: { position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: '#E8505B', borderWidth: 1, borderColor: '#FFF' },
-  addButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E8505B', alignItems: 'center', justifyContent: 'center' },
+  profileButton: { position: 'relative', marginLeft: 12 },
+  profileStatusDot: { position: 'absolute', top: 2, right: 2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#4CAF50', borderWidth: 2, borderColor: '#FFF' },
   statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 18 },
   statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#EDF1F6', boxShadow: '0px 2px 4px rgba(24,39,65,0.03)' },
   statLabel: { color: '#8C9DB9', fontSize: 11, fontWeight: '600', marginBottom: 8 },
