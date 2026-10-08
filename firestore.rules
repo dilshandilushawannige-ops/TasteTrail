@@ -42,6 +42,31 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Account settings only allow a user to manage their own profile.
+    match /users/{userId} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      allow read, delete: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'createdAt', 'bio', 'location'])
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string;
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'bio', 'location'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
+        && (!('location' in request.resource.data) || (request.resource.data.location is string && request.resource.data.location.size() <= 150));
+
+      match /favourites/{favouriteId} {
+        allow read, delete: if isOwner();
+      }
+    }
+
     // Default deny for all other collections
     match /{document=**} {
       allow read, write: if false;

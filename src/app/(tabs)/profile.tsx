@@ -1,11 +1,15 @@
 import { auth, db } from '@/firebaseConfig';
+import AccountSettingsButton from '@/components/AccountSettingsButton';
+import { CLOUDINARY_CONFIG } from '@/config/cloudinary';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { signOut } from 'firebase/auth';
+import * as ImagePicker from 'expo-image-picker';
+import { router, Tabs } from 'expo-router';
+import { updateProfile } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Image,
     RefreshControl,
     ScrollView,
@@ -14,6 +18,9 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+
+// Metro resolves bundled image assets through static require calls.
+const cameraIcon = require('@/assets/images/tabIcons/camera.png');
 
 interface UserRecipe {
   id: string;
@@ -37,6 +44,8 @@ export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState(auth.currentUser?.photoURL || null);
 
   const user = auth.currentUser;
 
@@ -118,12 +127,48 @@ export default function ProfileScreen() {
     fetchUserData();
   };
 
-  const handleLogout = async () => {
+  const handleUploadPhoto = async () => {
+    if (!user || uploadingPhoto) return;
+
+    setUploadingPhoto(true);
     try {
-      await signOut(auth);
-      router.replace('/login');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+      const image = result.assets[0];
+      if (!image.base64) throw new Error('Could not read the selected photo');
+
+      const response = await fetch(
+        CLOUDINARY_CONFIG.uploadUrl(CLOUDINARY_CONFIG.cloudName),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file: `data:image/jpeg;base64,${image.base64}`,
+            upload_preset: CLOUDINARY_CONFIG.uploadPreset,
+            folder: 'profile-photos',
+          }),
+        }
+      );
+      const uploaded = await response.json();
+      if (!response.ok || !uploaded.secure_url) {
+        throw new Error(uploaded.error?.message || 'Photo upload failed');
+      }
+
+      // Persist the photo on the authenticated account so it survives app restarts.
+      await updateProfile(user, { photoURL: uploaded.secure_url });
+      if (auth.currentUser?.uid === user.uid) setPhotoUrl(uploaded.secure_url);
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error uploading profile photo:', error);
+      Alert.alert('Upload failed', 'Could not save your profile photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -156,19 +201,36 @@ export default function ProfileScreen() {
       }
     >
       {/* Profile Section */}
+      <Tabs.Screen options={{ headerRight: () => <AccountSettingsButton onProfileUpdated={fetchUserData} /> }} />
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color="#E8505B" />
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person" size={48} color="#E8505B" />
+            )}
           </View>
-          <View style={styles.verifiedBadge}>
-            <Ionicons name="checkmark" size={16} color="#FFF" />
-          </View>
+          <TouchableOpacity
+            style={styles.uploadBadge}
+            onPress={handleUploadPhoto}
+            disabled={uploadingPhoto}
+            accessibilityRole="button"
+            accessibilityLabel="Upload profile photo"
+            accessibilityState={{ disabled: uploadingPhoto, busy: uploadingPhoto }}
+            hitSlop={8}
+          >
+            {uploadingPhoto ? (
+              <ActivityIndicator size="small" color="#1A1A1A" />
+            ) : (
+              <Image source={cameraIcon} style={styles.uploadIcon} resizeMode="contain" />
+            )}
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.userName}>{userProfile?.name || 'User'}</Text>
         <Text style={styles.userBio}>
-          {userProfile?.location || 'Southern Heritage Home Cook'} • Galle, Sri Lanka
+          {userProfile?.bio || 'Southern Heritage Home Cook'} • {userProfile?.location || 'Galle, Sri Lanka'}
         </Text>
 
         <View style={styles.badge}>
@@ -311,14 +373,23 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#E8505B',
   },
-  verifiedBadge: {
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 47,
+  },
+  uploadIcon: {
+    width: 24,
+    height: 24,
+  },
+  uploadBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
