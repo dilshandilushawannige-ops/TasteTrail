@@ -93,7 +93,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
     const inAdminGroup = segments[0] === 'admin';
     const inTabsGroup = segments[0] === '(tabs)';
-    const inAllowedRoute = segments[0] === 'cooking' || segments[0] === 'explore' || inTabsGroup;
+    const inAllowedRoute = segments[0] === 'cooking' || segments[0] === 'explore' || segments[0] === 'restaurant' || inTabsGroup;
 
     if (!user && !inAuthGroup) {
       // User is not logged in and not on auth screens, redirect to login
