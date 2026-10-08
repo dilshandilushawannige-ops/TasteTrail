@@ -1,10 +1,10 @@
 import {
   collection, doc, getDoc, getDocs, onSnapshot, query, where,
-  runTransaction, serverTimestamp, updateDoc, writeBatch, addDoc,
+  runTransaction, serverTimestamp, writeBatch, addDoc,
   type QueryDocumentSnapshot, type DocumentData,
 } from 'firebase/firestore';
 import { auth, db } from '@/firebaseConfig';
-import { Review, RatingSummary, CreateReviewData, UpdateReviewData } from '@/types/review';
+import { Review, ReviewMedia, RatingSummary, CreateReviewData, UpdateReviewData } from '@/types/review';
 
 const COLLECTION_NAME = 'reviews';
 const reviewQuery = (restaurantId: string) => query(collection(db, COLLECTION_NAME), where('restaurantId', '==', restaurantId));
@@ -53,7 +53,39 @@ export async function addReview(data: CreateReviewData): Promise<string> {
   } catch (error) { throw new Error(reviewErrorMessage(error)); }
 }
 export async function updateReview(reviewId: string, data: UpdateReviewData): Promise<void> {
-  await updateDoc(doc(db, COLLECTION_NAME, reviewId), { ...data, updatedAt: serverTimestamp() });
+  const user = auth.currentUser;
+  if (!user) throw new Error('Please sign in to update your review.');
+  try {
+    const profile = data.anonymous === false ? await getDoc(doc(db, 'users', user.uid)) : null;
+    await runTransaction(db, async transaction => {
+      const ref = doc(db, COLLECTION_NAME, reviewId);
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) throw new Error('This review is no longer available.');
+      const current = snapshot.data();
+      if (current.userId !== user.uid) throw new Error('You can only update your own review.');
+      const content = {
+        rating: data.rating ?? current.rating,
+        comment: (data.comment ?? current.comment).trim(),
+        diningType: data.diningType ?? current.diningType ?? 'Dine-in',
+        mealTime: data.mealTime ?? current.mealTime ?? 'Lunch',
+        visitedWith: data.visitedWith ?? current.visitedWith ?? 'Family',
+        anonymous: data.anonymous ?? current.anonymous ?? false,
+        media: data.media ?? current.media ?? [],
+      };
+      if (!Number.isInteger(content.rating) || content.rating < 1 || content.rating > 5 || content.comment.length < 10 || content.comment.length > 580) {
+        throw new Error('Select a rating and write a review between 10 and 580 characters.');
+      }
+      if (content.media.length > 6 || content.media.some((item: ReviewMedia) => !item.url.startsWith('https://') || !['image', 'video'].includes(item.type))) {
+        throw new Error('Please upload up to six photos or videos.');
+      }
+      transaction.update(ref, {
+        ...content,
+        userName: content.anonymous ? 'Anonymous' : user.displayName || profile?.data()?.name || (current.anonymous ? 'TasteTrail member' : current.userName),
+        userAvatar: content.anonymous ? '' : user.photoURL || (current.anonymous ? '' : current.userAvatar || ''),
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } catch (error) { throw new Error(reviewErrorMessage(error)); }
 }
 export async function deleteReview(reviewId: string): Promise<void> {
   // Remove replies too, so replacing a deleted review cannot inherit old comments.

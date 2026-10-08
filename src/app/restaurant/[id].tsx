@@ -575,7 +575,8 @@ export default function RestaurantDetailsScreen() {
                 <Text style={styles.emptyStateText}>No reviews yet</Text>
                 <Text style={styles.emptyStateSubtext}>Be the first to review</Text>
               </View>}
-              {reviews.map(review => <ReviewCard key={review.id} review={review} signatureDish={restaurant?.signatureDish} />)}
+              {reviews.map(review => <ReviewCard key={review.id} review={review} signatureDish={restaurant?.signatureDish}
+                restaurantName={restaurant?.name} restaurantPhoto={restaurant?.coverPhotoUrl} restaurantDescription={restaurant?.description} />)}
               <TouchableOpacity style={styles.writeReviewButton} onPress={() => setWriteReviewVisible(true)}>
                 <Text style={styles.writeReviewText}>Write a review</Text>
               </TouchableOpacity>

@@ -128,8 +128,16 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       allow update: if signedIn() && (validHelpfulChange() || (
         resource.data.userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'comment', 'updatedAt'])
-        && validContent(request.resource.data) && request.resource.data.updatedAt == request.time));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'comment', 'diningType', 'mealTime', 'visitedWith', 'anonymous', 'media', 'userName', 'userAvatar', 'updatedAt'])
+        && validContent(request.resource.data) && validMediaList(request.resource.data.media)
+        && request.resource.data.diningType in ['Dine-in', 'Takeaway', 'Delivery']
+        && request.resource.data.mealTime in ['Breakfast', 'Lunch', 'Dinner']
+        && request.resource.data.visitedWith in ['Solo', 'Couple', 'Family', 'Friends']
+        && request.resource.data.anonymous is bool
+        && request.resource.data.userName is string && request.resource.data.userName.size() > 0 && request.resource.data.userName.size() <= 100
+        && request.resource.data.userAvatar is string
+        && (!request.resource.data.anonymous || (request.resource.data.userName == 'Anonymous' && request.resource.data.userAvatar == ''))
+        && request.resource.data.updatedAt == request.time));
       allow delete: if signedIn() && resource.data.userId == request.auth.uid;
 
       match /comments/{commentId} {

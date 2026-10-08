@@ -3,9 +3,10 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Modal, Linking, TextIn
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '@/firebaseConfig';
 import { Review, ReviewMedia } from '@/types/review';
-import { addReviewComment, deleteReview, reviewErrorMessage, subscribeToReviewComments, toggleReviewHelpful, type ReviewComment } from '@/services/reviewService';
+import { addReviewComment, deleteReview, updateReview, reviewErrorMessage, subscribeToReviewComments, toggleReviewHelpful, type ReviewComment } from '@/services/reviewService';
+import { WriteReviewSheet } from './WriteReviewSheet';
 
-interface ReviewCardProps { review: Review; signatureDish?: string; }
+interface ReviewCardProps { review: Review; signatureDish?: string; restaurantName?: string; restaurantPhoto?: string; restaurantDescription?: string; }
 function relativeDate(date: Date) {
   const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
   if (days === 0) return 'Today';
@@ -13,9 +14,10 @@ function relativeDate(date: Date) {
   if (days < 7) return `${days} days ago`;
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
-export function ReviewCard({ review, signatureDish }: ReviewCardProps) {
+export function ReviewCard({ review, signatureDish, restaurantName = 'Restaurant', restaurantPhoto, restaurantDescription }: ReviewCardProps) {
   const [preview, setPreview] = useState<ReviewMedia | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [comment, setComment] = useState('');
@@ -57,10 +59,9 @@ export function ReviewCard({ review, signatureDish }: ReviewCardProps) {
         </View>
         {uid === review.userId && <TouchableOpacity accessibilityLabel="Review options" onPress={() => setMenuOpen(value => !value)} style={styles.options}><Ionicons name="ellipsis-horizontal" size={19} color="#8D9DB7" /></TouchableOpacity>}
       </View>
-      {menuOpen && <View style={styles.menu}>
-        <Text style={styles.menuText}>Delete your review?</Text>
-        <TouchableOpacity disabled={busy} onPress={() => perform(() => deleteReview(review.id))}><Text style={styles.deleteText}>{busy ? 'Deleting...' : 'Delete'}</Text></TouchableOpacity>
-        <TouchableOpacity onPress={() => setMenuOpen(false)}><Text style={styles.date}>Cancel</Text></TouchableOpacity>
+      {menuOpen && uid === review.userId && <View style={styles.menu}>
+        <TouchableOpacity accessibilityLabel="Update your review" disabled={busy} onPress={() => { setMenuOpen(false); setEditing(true); }}><Text style={styles.selectedText}>Update</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityLabel="Delete your review" disabled={busy} onPress={() => perform(() => deleteReview(review.id))}><Text style={styles.selectedText}>Delete</Text></TouchableOpacity>
       </View>}
       <View style={styles.tags}>{[review.diningType, review.mealTime].filter(Boolean).map((tag, index) => <View key={`${tag}-${index}`} style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>)}</View>
       <Text style={styles.comment}>{review.comment}</Text>
@@ -82,6 +83,11 @@ export function ReviewCard({ review, signatureDish }: ReviewCardProps) {
         <TouchableOpacity disabled={busy || !comment.trim()} onPress={() => perform(async () => { await addReviewComment(review.id, comment); setComment(''); })} style={styles.postComment}><Text style={styles.selectedText}>{busy ? 'Posting...' : 'Post comment'}</Text></TouchableOpacity>
       </View>}
       {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+      {editing && uid === review.userId && <WriteReviewSheet
+        visible initialReview={review} restaurantId={review.restaurantId}
+        restaurantName={restaurantName} restaurantPhoto={restaurantPhoto} restaurantDescription={restaurantDescription}
+        onClose={() => setEditing(false)} onSubmit={data => updateReview(review.id, data)}
+      />}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
         <View style={styles.preview}>
           <TouchableOpacity accessibilityLabel="Close review photo" style={styles.closePreview} onPress={() => setPreview(null)}><Ionicons name="close" size={28} color="#FFF" /></TouchableOpacity>
@@ -118,8 +124,6 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 12, color: '#8191AC' },
   selectedText: { color: '#B5213B', fontSize: 12, fontWeight: '600' },
   menu: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingVertical: 12 },
-  menuText: { fontSize: 12, color: '#54627B' },
-  deleteText: { fontSize: 12, color: '#B5213B', fontWeight: '700' },
   commentArea: { gap: 10, marginTop: 12, borderTopWidth: 1, borderTopColor: '#F0F3FA', paddingTop: 12 },
   reply: { gap: 3 },
   replyName: { fontSize: 12, color: '#1B2236', fontWeight: '600' },

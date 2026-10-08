@@ -38,4 +38,6 @@ export interface RatingSummary {
 }
 
 export type CreateReviewData = Omit<Review, 'id' | 'createdAt' | 'updatedAt'>;
-export type UpdateReviewData = Partial<Pick<Review, 'rating' | 'comment'>>;
+export type UpdateReviewData = Partial<Pick<Review,
+  'rating' | 'comment' | 'diningType' | 'mealTime' | 'visitedWith' | 'anonymous' | 'media'
+>>;
