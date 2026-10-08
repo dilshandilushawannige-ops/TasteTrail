@@ -6,17 +6,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { subscribeToRestaurants, Restaurant } from '@/services/restaurantService';
-import { calculateDistance, isWithinRadius, Coordinates } from '@/utils/distance';
+import { calculateDistance, Coordinates } from '@/utils/distance';
+import { DISCOVER_RADIUS_KM } from '@/constants/discover';
 
 // Default location (Galle Fort, Sri Lanka)
 const DEFAULT_LOCATION: Coordinates = {
   latitude: 6.0329,
   longitude: 80.2168,
 };
-
-export interface UseNearbyRestaurantsProps {
-  initialRadius?: number;
-}
 
 export interface UseNearbyRestaurantsReturn {
   // Location state
@@ -34,13 +31,11 @@ export interface UseNearbyRestaurantsReturn {
   restaurantError: string | null;
   
   // Filters
-  radius: number;
   sortBy: 'distance' | 'rating';
   searchText: string;
   selectedCategory: string | null;
   
   // Actions
-  setRadius: (radius: number) => void;
   setSortBy: (sortBy: 'distance' | 'rating') => void;
   setSearchText: (text: string) => void;
   setSelectedCategory: (category: string | null) => void;
@@ -50,9 +45,7 @@ export interface UseNearbyRestaurantsReturn {
   geocodeLocation: (query: string) => Promise<boolean>;
 }
 
-export function useNearbyRestaurants({ 
-  initialRadius = 10 
-}: UseNearbyRestaurantsProps = {}): UseNearbyRestaurantsReturn {
+export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
   // Location state
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [searchCenter, setSearchCenter] = useState<Coordinates>(DEFAULT_LOCATION);
@@ -66,7 +59,6 @@ export function useNearbyRestaurants({
   const [restaurantError, setRestaurantError] = useState<string | null>(null);
   
   // Filters
-  const [radius, setRadius] = useState(initialRadius);
   const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -158,16 +150,19 @@ export function useNearbyRestaurants({
         // Only active/published restaurants
         if (restaurant.status !== 'active') return false;
         
-        // Must have location
-        if (!restaurant.location) return false;
-        
-        // Within radius
-        const restaurantCoords: Coordinates = {
-          latitude: restaurant.location.latitude,
-          longitude: restaurant.location.longitude,
-        };
-        
-        if (!isWithinRadius(searchCenter, restaurantCoords, radius)) return false;
+        const latitude = Number(restaurant.location?.latitude);
+        const longitude = Number(restaurant.location?.longitude);
+        const hasValidCoordinates = Number.isFinite(latitude) &&
+          Number.isFinite(longitude) &&
+          latitude !== 0 &&
+          longitude !== 0;
+
+        if (
+          userLocation &&
+          DISCOVER_RADIUS_KM !== null &&
+          hasValidCoordinates &&
+          calculateDistance(userLocation, { latitude, longitude }) > DISCOVER_RADIUS_KM
+        ) return false;
         
         // Category filter
         if (selectedCategory && restaurant.category !== selectedCategory) return false;
@@ -189,18 +184,29 @@ export function useNearbyRestaurants({
         
         return true;
       })
-      .map(restaurant => ({
+      .map(restaurant => {
+        const latitude = Number(restaurant.location?.latitude);
+        const longitude = Number(restaurant.location?.longitude);
+        const hasValidCoordinates = Number.isFinite(latitude) &&
+          Number.isFinite(longitude) &&
+          latitude !== 0 &&
+          longitude !== 0;
+        return {
         ...restaurant,
-        distance: calculateDistance(searchCenter, {
-          latitude: restaurant.location!.latitude,
-          longitude: restaurant.location!.longitude,
-        })
-      }));
+        distance: userLocation && hasValidCoordinates
+          ? calculateDistance(userLocation, { latitude, longitude })
+          : Number.POSITIVE_INFINITY,
+        };
+      });
 
     // Sort
     filtered.sort((a, b) => {
-      if (sortBy === 'distance') {
+      if (sortBy === 'distance' && userLocation) {
         return a.distance - b.distance;
+      } else if (sortBy === 'distance') {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
       } else {
         // Sort by rating, then by review count
         if (a.rating !== b.rating) {
@@ -211,7 +217,7 @@ export function useNearbyRestaurants({
     });
 
     return filtered;
-  }, [restaurants, searchCenter, radius, selectedCategory, searchText, sortBy]);
+  }, [restaurants, searchCenter, userLocation, selectedCategory, searchText, sortBy]);
 
   // Get currently open restaurants
   const openRestaurants = useMemo(() => {
@@ -278,13 +284,11 @@ export function useNearbyRestaurants({
     restaurantError,
     
     // Filters
-    radius,
     sortBy,
     searchText,
     selectedCategory,
     
     // Actions
-    setRadius,
     setSortBy,
     setSearchText,
     setSelectedCategory,

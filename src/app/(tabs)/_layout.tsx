@@ -146,6 +146,7 @@ export default function TabLayout() {
             />
           ),
           headerTitle: '',
+          headerRight: () => <HeaderRight showNotification={false} />,
         }}
       />
 

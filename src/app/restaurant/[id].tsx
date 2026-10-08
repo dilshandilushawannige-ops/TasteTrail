@@ -41,7 +41,7 @@ export default function RestaurantDetailsScreen() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  const { isSaved, toggle } = useSavedRestaurants();
   const [activeTab, setActiveTab] = useState<'overview' | 'photos' | 'reviews'>('overview');
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [imageModalIndex, setImageModalIndex] = useState(0);
@@ -354,12 +354,12 @@ export default function RestaurantDetailsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.heroButton}
-              onPress={() => setIsBookmarked(!isBookmarked)}
+              onPress={() => toggle(restaurant.id)}
             >
               <Ionicons 
-                name={isBookmarked ? 'bookmark' : 'bookmark-outline'} 
+                name={isSaved(restaurant.id) ? 'bookmark' : 'bookmark-outline'} 
                 size={20} 
-                color="#FFF" 
+                color={isSaved(restaurant.id) ? '#E8505B' : '#FFF'} 
               />
             </TouchableOpacity>
           </View>
@@ -530,7 +530,7 @@ export default function RestaurantDetailsScreen() {
               <TouchableOpacity
                 style={[styles.menuButton, { marginBottom: insets.bottom + 24 }]}
                 onPress={() => {
-                  // TODO: navigate to menu
+                  router.push({ pathname: '/restaurant/[id]/menu', params: { id: restaurant.id } });
                 }}
               >
                 <Text style={styles.menuButtonText}>View Menu</Text>
