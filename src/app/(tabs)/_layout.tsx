@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AccountSettingsButton from '@/components/AccountSettingsButton';
 import { Tabs, router } from 'expo-router';
 import { Image, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 
@@ -161,17 +162,7 @@ export default function TabLayout() {
             />
           ),
           headerTitle: '',
-          headerRight: () => (
-            <TouchableOpacity 
-              style={{ marginRight: 16 }}
-              onPress={() => {
-                // You can add settings navigation here
-                // router.push('/settings')
-              }}
-            >
-              <Ionicons name="settings-outline" size={24} color="#333" />
-            </TouchableOpacity>
-          ),
+          headerRight: () => <AccountSettingsButton />,
         }}
       />
     </Tabs>
