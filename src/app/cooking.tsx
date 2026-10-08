@@ -15,6 +15,45 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }
 
+function CircularTimer({ remaining, total }: { remaining: number; total: number }) {
+  const size = 120;
+  const strokeWidth = 8;
+  const progress = total > 0 ? remaining / total : 0;
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`${Math.floor(remaining / 60)} minutes ${remaining % 60} seconds remaining`}
+    >
+      <View style={{ 
+        width: size, 
+        height: size, 
+        borderRadius: size / 2, 
+        borderWidth: strokeWidth, 
+        borderColor: '#F3E7E8',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative'
+      }}>
+        {/* Progress arc using overlaid View - simplified for React Native without SVG */}
+        <View style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: strokeWidth,
+          borderColor: 'transparent',
+          borderTopColor: '#E8505B',
+          borderRightColor: progress > 0.25 ? '#E8505B' : 'transparent',
+          borderBottomColor: progress > 0.5 ? '#E8505B' : 'transparent',
+          borderLeftColor: progress > 0.75 ? '#E8505B' : 'transparent',
+          transform: [{ rotate: `${-90 + (1 - progress) * 360}deg` }]
+        }} />
+      </View>
+    </View>
+  );
+}
+
 function Button({ title, onPress, disabled = false, secondary = false }: {
   title: string; onPress: () => void; disabled?: boolean; secondary?: boolean;
 }) {
@@ -44,6 +83,9 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   const [retry, setRetry] = useState(0);
   const [minutes, setMinutes] = useState('5');
   const [clock, setClock] = useState(() => Date.now());
+  const [showVoicePlayer, setShowVoicePlayer] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [confirmCookAgain, setConfirmCookAgain] = useState(false);
   const lock = useRef(false);
   const generation = useRef(0);
 
@@ -71,6 +113,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
       setSession(null);
       setError('');
       setConfirmDelete(false);
+      setConfirmCookAgain(false);
       setTab('ingredients');
       // Reset photo state whenever we switch recipes or re-auth.
       setFetchedImageUrl(undefined);
@@ -127,7 +170,11 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   // ─────────────────────────────────────────────────────────────────────────
 
   useFocusEffect(useCallback(() => {
-    return () => { void Speech.stop().catch(() => undefined); };
+    return () => { 
+      void Speech.stop().catch(() => undefined);
+      setShowVoicePlayer(false);
+      setIsSpeaking(false);
+    };
   }, []));
 
   useEffect(() => {
@@ -168,7 +215,26 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
     });
   }
 
-  function stopVoice() { void Speech.stop().catch((failure: any) => setError(message(failure))); }
+  async function cookAgain() {
+    if (!recipe) return;
+    await run(async (uid, token) => {
+      // Delete the completed session
+      await deleteCooking(uid, recipe.id);
+      // Start fresh session
+      const saved = await startCooking(uid, recipe);
+      if (token !== generation.current) return;
+      setRecipe(saved.recipe);
+      setSession(saved);
+      setConfirmCookAgain(false);
+      setTab('steps');
+    });
+  }
+
+  function stopVoice() { 
+    void Speech.stop().catch((failure: any) => setError(message(failure)));
+    setIsSpeaking(false);
+    setShowVoicePlayer(false);
+  }
 
   async function readAloud() {
     if (!recipe) return;
@@ -183,13 +249,28 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
     setError('');
     try {
       await Speech.stop();
-      Speech.speak(spoken, { language: 'en-US', rate: 0.85,
-        onError: () => setError('Voice playback failed. Check device voices and volume, then try again.'),
+      setShowVoicePlayer(true);
+      setIsSpeaking(true);
+      Speech.speak(spoken, { 
+        language: 'en-US', 
+        rate: 0.85,
+        onError: () => {
+          setError('Voice playback failed. Check device voices and volume, then try again.');
+          setIsSpeaking(false);
+        },
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
       });
-    } catch (failure) { setError(message(failure)); }
+    } catch (failure) { 
+      setError(message(failure));
+      setIsSpeaking(false);
+    }
   }
 
-  function changeTab(next: 'ingredients' | 'steps') { stopVoice(); setTab(next); }
+  function changeTab(next: 'ingredients' | 'steps') { 
+    stopVoice(); 
+    setTab(next); 
+  }
 
   async function nextStep() {
     if (!session) return;
@@ -225,10 +306,32 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={[styles.row, styles.between]}>
-          <Button title="Back" onPress={leave} disabled={busy} secondary />
-          <Text style={styles.label}>COOKING MODE</Text>
+        <View style={styles.header}>
+          <Pressable onPress={leave} disabled={busy} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="Go back">
+            <Ionicons name="arrow-back" size={24} color="#202536" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Cooking Mode</Text>
+          <Pressable onPress={leave} disabled={busy} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="Close cooking mode">
+            <Ionicons name="close" size={24} color="#202536" />
+          </Pressable>
         </View>
+
+        {session && (
+          <>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBarFill, { 
+                width: `${Math.round((session.completedStepIndexes.length / recipe!.steps.length) * 100)}%` 
+              }]} />
+            </View>
+            <View style={styles.stepBadgeContainer}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>
+                  STEP {session.currentStepIndex + 1} OF {recipe!.steps.length}
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
 
         {loading && <ActivityIndicator size="large" color="#E8505B" />}
         {!!error && (
@@ -297,7 +400,23 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
           {session?.status === 'completed' && (
             <View style={styles.card}>
               <Text style={styles.success}>Cooking completed!</Text>
-              <Text style={styles.muted}>Your completed session is saved. Delete this session below if you want to cook it again from the beginning.</Text>
+              <Text style={styles.muted}>
+                {confirmCookAgain 
+                  ? 'This will delete your saved progress and start fresh from step 1.' 
+                  : 'Great job! Want to cook this recipe again?'}
+              </Text>
+              {!confirmCookAgain ? (
+                <Button title="Cook Again" onPress={() => setConfirmCookAgain(true)} disabled={busy} />
+              ) : (
+                <View style={styles.row}>
+                  <View style={styles.flex}>
+                    <Button title="Yes, start fresh" onPress={() => void cookAgain()} disabled={busy} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Button title="Cancel" secondary onPress={() => setConfirmCookAgain(false)} disabled={busy} />
+                  </View>
+                </View>
+              )}
             </View>
           )}
 
@@ -320,55 +439,137 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
               <Button title="Start cooking" onPress={() => void begin()} disabled={blocked} />
             </View>
           ) : (
-            <View style={styles.card}>
-              <Text style={styles.label}>STEP {session.currentStepIndex + 1} OF {recipe.steps.length}</Text>
-              <View style={styles.track}>
-                <View style={[styles.fill, { width: `${session.completedStepIndexes.length / recipe.steps.length * 100}%` }]} />
+            <View style={styles.stepsCard}>
+              <View style={styles.instructionCard}>
+                <Text style={styles.instructionLabel}>
+                  STEP {session.currentStepIndex + 1} OF {recipe.steps.length}
+                </Text>
+                <View style={styles.track}>
+                  <View style={[styles.fill, { width: `${session.completedStepIndexes.length / recipe.steps.length * 100}%` }]} />
+                </View>
+                <Text style={styles.instructionText}>
+                  {recipe.steps[session.currentStepIndex]}
+                </Text>
               </View>
-              <Text style={styles.muted}>{session.completedStepIndexes.length} of {recipe.steps.length} steps completed</Text>
-              <Text style={styles.instruction}>{recipe.steps[session.currentStepIndex]}</Text>
-              <View style={styles.row}>
-                <Button title="Read step aloud" onPress={readAloud} secondary disabled={busy} />
-                <Button title="Stop voice" onPress={stopVoice} secondary />
+
+              {/* Spoken Instructions Row */}
+              <View style={styles.voiceControlRow}>
+                <Text style={styles.voiceControlLabel}>Spoken Instructions</Text>
+                <Pressable
+                  onPress={readAloud}
+                  disabled={blocked}
+                  style={[styles.playAudioButton, blocked && styles.disabled]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Play audio instructions"
+                >
+                  <Ionicons name="play" size={16} color="#FFFFFF" />
+                  <Text style={styles.playAudioButtonText}>Play Audio</Text>
+                </Pressable>
               </View>
-              {session.status !== 'completed' && <View style={styles.row}>
-                <View style={styles.flex}><Button title="Previous" secondary
-                  disabled={blocked || session.currentStepIndex === 0}
-                  onPress={() => { stopVoice(); void save({ currentStepIndex: session.currentStepIndex - 1 }); }} /></View>
-                <View style={styles.flex}><Button disabled={blocked}
-                  title={busy ? 'Saving…' : session.currentStepIndex === recipe.steps.length - 1 ? 'Finish cooking' : 'Next step'}
-                  onPress={() => void nextStep()} /></View>
-              </View>}
             </View>
           )}
 
           {session?.status === 'in_progress' && (
-            <View style={styles.card}>
-              <Text style={styles.heading}>Your cooking timer</Text>
-              <Text style={styles.muted}>Set your own duration. This timer continues across steps and is separate from recipe instructions.</Text>
-              <Text style={styles.timer}>{timeLabel}</Text>
-              {remaining === 0 && <Text style={styles.success} accessibilityLiveRegion="polite">Timer finished</Text>}
-              <View style={styles.row}>
-                <TextInput style={styles.input} value={minutes} onChangeText={setMinutes} keyboardType="decimal-pad"
-                  accessibilityLabel="Timer duration in minutes" editable={!busy} maxLength={6} />
-                <Text style={styles.muted}>minutes</Text>
-                <Button title="Set / reset" onPress={setTimer} secondary disabled={blocked} />
+            <View style={styles.timerCard}>
+              <Text style={styles.timerCardLabel}>Cooking Timer</Text>
+              <CircularTimer remaining={remaining} total={session.timerRemainingSeconds} />
+              <Text style={styles.timerDigital}>{timeLabel}</Text>
+              {remaining === 0 && (
+                <Text style={styles.success} accessibilityLiveRegion="polite">Timer finished</Text>
+              )}
+              <View style={styles.timerControls}>
+                <TextInput
+                  style={styles.timerInput}
+                  value={minutes}
+                  onChangeText={setMinutes}
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Timer duration in minutes"
+                  editable={!busy}
+                  maxLength={6}
+                  placeholder="Minutes"
+                />
+                <Button title="Set" onPress={setTimer} secondary disabled={blocked} />
               </View>
-              <Button disabled={blocked || remaining === 0}
-                title={session.timerEndAt ? 'Pause timer' : 'Start timer'}
+              <Button
+                disabled={blocked || remaining === 0}
+                title={session.timerEndAt ? 'Pause Timer' : 'Start Timer'}
                 onPress={() => {
                   if (session.timerEndAt) {
-                    void save({ timerEndAt: null, timerRemainingSeconds: Math.max(0, Math.ceil((session.timerEndAt - Date.now()) / 1000)) });
-                  } else { void save({ timerEndAt: Date.now() + remaining * 1000 }); }
-                }} />
+                    void save({
+                      timerEndAt: null,
+                      timerRemainingSeconds: Math.max(0, Math.ceil((session.timerEndAt - Date.now()) / 1000))
+                    });
+                  } else {
+                    void save({ timerEndAt: Date.now() + remaining * 1000 });
+                  }
+                }}
+              />
               <Text style={styles.muted}>Time is restored when you return. This version does not send background alarms or notifications.</Text>
+            </View>
+          )}
+
+          {showVoicePlayer && session && (
+            <View style={styles.miniPlayer}>
+              <View style={styles.miniPlayerContent}>
+                {displayImageUrl ? (
+                  <Image source={{ uri: displayImageUrl }} style={styles.miniPlayerThumbnail} contentFit="cover" />
+                ) : (
+                  <View style={[styles.miniPlayerThumbnail, { backgroundColor: '#E8E8E3', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Ionicons name="restaurant-outline" size={20} color="#6B7280" />
+                  </View>
+                )}
+                <View style={styles.miniPlayerInfo}>
+                  <Text style={styles.miniPlayerStep} numberOfLines={1}>
+                    Step {session.currentStepIndex + 1}
+                  </Text>
+                  <Text style={styles.miniPlayerRecipe} numberOfLines={1}>
+                    {recipe.name}
+                  </Text>
+                  {isSpeaking && <Text style={styles.miniPlayerStatus}>Speaking...</Text>}
+                </View>
+              </View>
+              <View style={styles.miniPlayerControls}>
+                <Pressable onPress={readAloud} disabled={busy} style={styles.miniPlayerButton} accessibilityRole="button" accessibilityLabel="Repeat">
+                  <Ionicons name="refresh" size={20} color="#FFFFFF" />
+                </Pressable>
+                <Pressable onPress={stopVoice} style={styles.miniPlayerButton} accessibilityRole="button" accessibilityLabel="Stop">
+                  <Ionicons name="stop" size={20} color="#FFFFFF" />
+                </Pressable>
+                <Pressable onPress={() => { stopVoice(); }} style={styles.miniPlayerButton} accessibilityRole="button" accessibilityLabel="Close player">
+                  <Ionicons name="close" size={20} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {session?.status === 'in_progress' && (
+            <View style={styles.bottomNavigation}>
+              <View style={styles.bottomNavPrevious}>
+                <Button
+                  title="Previous"
+                  secondary
+                  disabled={blocked || session.currentStepIndex === 0}
+                  onPress={() => {
+                    stopVoice();
+                    void save({ currentStepIndex: session.currentStepIndex - 1 });
+                  }}
+                />
+              </View>
+              <View style={styles.bottomNavNext}>
+                <Button
+                  disabled={blocked}
+                  title={busy ? 'Saving…' : session.currentStepIndex === recipe.steps.length - 1 ? 'Finish Cooking' : 'Next Step'}
+                  onPress={() => void nextStep()}
+                />
+              </View>
             </View>
           )}
 
           {session && <View style={styles.card}>
             {!confirmDelete ? (
-              <Button title="Delete cooking session" secondary disabled={busy}
-                onPress={() => { stopVoice(); setConfirmDelete(true); }} />
+              <Pressable onPress={() => { stopVoice(); setConfirmDelete(true); }} disabled={busy} accessibilityRole="button">
+                <Text style={styles.deleteSessionLink}>Delete cooking session</Text>
+              </Pressable>
             ) : <>
               <Text style={styles.danger}>Delete saved progress and timer for this recipe?</Text>
               <Text style={styles.muted}>The recipe and your bookmark will remain.</Text>

@@ -3,16 +3,16 @@ import { StyleSheet } from 'react-native';
 export const cookingStyles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#FAFAF7',
+    backgroundColor: '#FFFFFF',
   },
 
   scroll: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 80,
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
-    gap: 18,
+    gap: 16,
   },
 
   row: {
@@ -192,11 +192,11 @@ export const cookingStyles = StyleSheet.create({
 
   recipeImageWrapper: {
     // Sits between the recipe title and the ingredient/steps tabs.
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#F0EFEA', // neutral cream — visible while loading
-    // Enforce a 4:3 aspect ratio that works on all screen widths.
-    aspectRatio: 4 / 3,
+    // Enforce a 16:9 aspect ratio that works on all screen widths.
+    aspectRatio: 16 / 9,
     width: '100%',
   },
 
@@ -225,5 +225,250 @@ export const cookingStyles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+
+  // ── Header ────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    minHeight: 44,
+  },
+
+  headerButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+  },
+
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#202536',
+    flex: 1,
+    textAlign: 'center',
+  },
+
+  // ── Progress Bar ──────────────────────────────────────────────────────
+  progressBarContainer: {
+    height: 4,
+    backgroundColor: '#F3E7E8',
+    width: '100%',
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+
+  progressBarFill: {
+    height: 4,
+    backgroundColor: '#E8505B',
+  },
+
+  stepBadgeContainer: {
+    alignItems: 'flex-start',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+
+  stepBadge: {
+    backgroundColor: '#FFF0EF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+
+  stepBadgeText: {
+    color: '#E8505B',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  // ── Steps Card ────────────────────────────────────────────────────────
+  stepsCard: {
+    gap: 16,
+  },
+
+  instructionCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8E8E3',
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+
+  instructionLabel: {
+    color: '#E8505B',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  instructionText: {
+    color: '#202536',
+    fontSize: 22,
+    lineHeight: 32,
+    fontWeight: '500',
+  },
+
+  voiceControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+
+  voiceControlLabel: {
+    color: '#303746',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+
+  playAudioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E8505B',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    minHeight: 36,
+  },
+
+  playAudioButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // ── Timer Card ────────────────────────────────────────────────────────
+  timerCard: {
+    backgroundColor: '#F7F7F5',
+    borderRadius: 16,
+    padding: 20,
+    gap: 16,
+    alignItems: 'center',
+  },
+
+  timerCardLabel: {
+    color: '#303746',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  timerDigital: {
+    color: '#202536',
+    fontSize: 32,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+
+  timerControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+
+  timerInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D8DADD',
+    borderRadius: 10,
+    minHeight: 48,
+    padding: 12,
+    color: '#202536',
+    backgroundColor: '#FFFFFF',
+    textAlign: 'center',
+  },
+
+  // ── Mini Player ───────────────────────────────────────────────────────
+  miniPlayer: {
+    backgroundColor: '#2C2C2C',
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  miniPlayerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+
+  miniPlayerThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+
+  miniPlayerInfo: {
+    flex: 1,
+    gap: 2,
+  },
+
+  miniPlayerStep: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  miniPlayerRecipe: {
+    color: '#B0B0B0',
+    fontSize: 13,
+  },
+
+  miniPlayerStatus: {
+    color: '#E8505B',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+
+  miniPlayerControls: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
+  miniPlayerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#404040',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Bottom Navigation ─────────────────────────────────────────────────
+  bottomNavigation: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+
+  bottomNavPrevious: {
+    flex: 1,
+  },
+
+  bottomNavNext: {
+    flex: 2,
+  },
+
+  // ── Delete Session Link ───────────────────────────────────────────────
+  deleteSessionLink: {
+    color: '#E8505B',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: 12,
+    textDecorationLine: 'underline',
   },
 });
