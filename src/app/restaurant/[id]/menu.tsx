@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   headerButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#EEF0F4', shadowColor: '#1F2937', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 2 },
   onlineDot: { position: 'absolute', right: 1, bottom: 1, width: 9, height: 9, borderRadius: 5, backgroundColor: '#36A269', borderWidth: 2, borderColor: '#FFF' },
   overline: { color: RED, fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  restaurantName: { color: NAVY, fontSize: 26, lineHeight: 32, fontWeight: '800', marginBottom: 6 },
+  restaurantName: { color: NAVY, fontSize: 26, lineHeight: 32, fontWeight: 'bold', marginBottom: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
   metaText: { color: MUTED, fontSize: 12, flexShrink: 1 },
   addressText: { color: MUTED, fontSize: 13, flex: 1, lineHeight: 17 },

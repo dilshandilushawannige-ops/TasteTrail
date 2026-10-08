@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useNearbyRestaurants } from '@/hooks/useNearbyRestaurants';
+import { useSavedRestaurants } from '@/hooks/useSavedRestaurants';
 import { RESTAURANT_CATEGORIES } from '@/constants/restaurant';
 import type { Restaurant } from '@/services/restaurantService';
 
@@ -40,6 +41,8 @@ export default function DiscoverScreen() {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [lastTapTime, setLastTapTime] = useState<number>(0);
+  const [toast, setToast] = useState('');
+  const { isSaved, toggle } = useSavedRestaurants();
 
   const {
     nearbyRestaurants,
@@ -80,8 +83,13 @@ export default function DiscoverScreen() {
   };
 
   // Handle bookmark toggle
-  const handleBookmark = (restaurant: Restaurant) => {
-    console.log('Bookmark toggled for:', restaurant.name);
+  const handleBookmark = async (restaurant: Restaurant) => {
+    const wasSaved = isSaved(restaurant.id);
+    const updated = await toggle(restaurant.id);
+    if (updated) {
+      setToast(wasSaved ? 'Removed from favourites' : 'Saved to favourites');
+      setTimeout(() => setToast(''), 1600);
+    }
   };
 
   // Render search row with functional search input
@@ -277,10 +285,13 @@ export default function DiscoverScreen() {
               {restaurant.name}
             </Text>
             <TouchableOpacity 
-              onPress={() => handleBookmark(restaurant)}
+              onPress={(event) => {
+                event.stopPropagation();
+                void handleBookmark(restaurant);
+              }}
               style={styles.bookmarkButton}
             >
-              <Ionicons name="bookmark-outline" size={20} color="#64748B" />
+              <Ionicons name={isSaved(restaurant.id) ? 'bookmark' : 'bookmark-outline'} size={20} color={isSaved(restaurant.id) ? '#E8505B' : '#64748B'} />
             </TouchableOpacity>
           </View>
 
@@ -359,6 +370,7 @@ export default function DiscoverScreen() {
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
+      {toast ? <View style={styles.toast}><Ionicons name="bookmark" size={15} color="#FFF" /><Text style={styles.toastText}>{toast}</Text></View> : null}
     </SafeAreaView>
   );
 }
@@ -368,6 +380,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAF7',
   },
+  toast: { position: 'absolute', bottom: 24, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#1F2937', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10 },
+  toastText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
   scrollView: {
     flex: 1,
   },
