@@ -20,6 +20,9 @@ import {
 import { geohashForLocation } from 'geofire-common';
 import { db } from '@/firebaseConfig';
 
+// In-memory cache for fast loading
+const restaurantCache = new Map<string, Restaurant>();
+
 export interface Restaurant {
   id: string;
   name: string;
@@ -92,10 +95,15 @@ export async function updateRestaurant(id: string, data: UpdateRestaurantData): 
 }
 
 /**
- * Gets a single restaurant by ID
+ * Gets a single restaurant by ID, with cache for fast loading
  */
 export async function getRestaurant(id: string): Promise<Restaurant | null> {
   try {
+    // Return cached version first if available
+    if (restaurantCache.has(id)) {
+      return restaurantCache.get(id)!;
+    }
+
     const docRef = doc(db, 'restaurants', id);
     const docSnap = await getDoc(docRef);
 
@@ -128,6 +136,9 @@ export async function getRestaurant(id: string): Promise<Restaurant | null> {
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       };
+      
+      // Cache the restaurant
+      restaurantCache.set(id, restaurant);
       return restaurant;
     } else {
       return null;
@@ -136,6 +147,13 @@ export async function getRestaurant(id: string): Promise<Restaurant | null> {
     console.error('Error getting restaurant:', error);
     throw new Error(`Failed to get restaurant: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+}
+
+/**
+ * Get restaurant from cache only (for instant loading)
+ */
+export function getRestaurantFromCache(id: string): Restaurant | null {
+  return restaurantCache.get(id) || null;
 }
 
 /**
@@ -196,6 +214,8 @@ export function subscribeToRestaurants(
             updatedAt: data.updatedAt,
           };
           restaurants.push(restaurant);
+          // Cache each restaurant for fast loading
+          restaurantCache.set(restaurant.id, restaurant);
         });
         callback(restaurants);
       },
@@ -265,6 +285,8 @@ function subscribeToRestaurantsClientSort(
           updatedAt: data.updatedAt,
         };
         restaurants.push(restaurant);
+        // Cache each restaurant for fast loading
+        restaurantCache.set(restaurant.id, restaurant);
       });
       
       // Sort client-side by createdAt descending

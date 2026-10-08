@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useNearbyRestaurants } from '@/hooks/useNearbyRestaurants';
 import { RESTAURANT_CATEGORIES } from '@/constants/restaurant';
 import type { Restaurant } from '@/services/restaurantService';
@@ -38,6 +39,7 @@ const getCategoryIcon = (category: string): string => {
 export default function DiscoverScreen() {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [lastTapTime, setLastTapTime] = useState<number>(0);
 
   const {
     nearbyRestaurants,
@@ -240,7 +242,20 @@ export default function DiscoverScreen() {
     const cuisineTags = restaurant.tags.slice(0, 2);
 
     return (
-      <View style={styles.restaurantCard}>
+      <TouchableOpacity 
+        style={styles.restaurantCard}
+        activeOpacity={0.7}
+        onPress={() => {
+          // Prevent double taps within 600ms
+          const now = Date.now();
+          if (now - lastTapTime < 600) {
+            return;
+          }
+          setLastTapTime(now);
+          
+          router.push({ pathname: '/restaurant/[id]', params: { id: restaurant.id } });
+        }}
+      >
         {/* Restaurant photo with category icon */}
         <View style={styles.photoContainer}>
           <Image
@@ -261,7 +276,10 @@ export default function DiscoverScreen() {
             <Text style={styles.restaurantName} numberOfLines={1}>
               {restaurant.name}
             </Text>
-            <TouchableOpacity onPress={() => handleBookmark(restaurant)}>
+            <TouchableOpacity 
+              onPress={() => handleBookmark(restaurant)}
+              style={styles.bookmarkButton}
+            >
               <Ionicons name="bookmark-outline" size={20} color="#64748B" />
             </TouchableOpacity>
           </View>
@@ -303,7 +321,7 @@ export default function DiscoverScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
   return (
@@ -315,7 +333,11 @@ export default function DiscoverScreen() {
         {renderSectionHeader()}
         
         {/* Restaurant list */}
-        <View style={styles.restaurantList}>
+        <ScrollView 
+          style={styles.restaurantList}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {nearbyRestaurants.slice(0, 5).map((restaurant) => (
             <View key={restaurant.id} style={styles.restaurantCardWrapper}>
               {renderRestaurantCard({ item: restaurant })}
@@ -332,7 +354,7 @@ export default function DiscoverScreen() {
               </Text>
             </View>
           )}
-        </View>
+        </ScrollView>
 
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
@@ -722,6 +744,9 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     flex: 1,
     marginRight: 8,
+  },
+  bookmarkButton: {
+    padding: 4, // Increase tap area
   },
   locationRow: {
     flexDirection: 'row',
