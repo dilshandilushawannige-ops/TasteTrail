@@ -48,7 +48,20 @@ service cloud.firestore {
         return request.auth != null && request.auth.uid == userId;
       }
 
-      allow read, delete: if isOwner();
+      // Only trusted authentication claims grant access to the full user list.
+      function isUserAdmin() {
+        return request.auth != null && (
+          request.auth.token.get('admin', false) == true ||
+          request.auth.token.get('admin', false) == 'true' ||
+          request.auth.token.get('isAdmin', false) == true ||
+          request.auth.token.get('role', '') == 'admin' ||
+          (request.auth.token.get('roles', []) is list &&
+            request.auth.token.get('roles', []).hasAny(['admin']))
+        );
+      }
+
+      allow read: if isOwner() || isUserAdmin();
+      allow delete: if isOwner();
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'createdAt', 'bio', 'location'])
         && request.resource.data.uid == userId
