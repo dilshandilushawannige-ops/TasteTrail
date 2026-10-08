@@ -28,6 +28,7 @@ import { onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 import { Restaurant, getRestaurantFromCache } from '@/services/restaurantService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WriteReviewSheet } from '@/components/reviews/WriteReviewSheet';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -42,6 +43,7 @@ export default function RestaurantDetailsScreen() {
   const [activeTab, setActiveTab] = useState<'overview' | 'photos' | 'reviews'>('overview');
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [imageModalIndex, setImageModalIndex] = useState(0);
+  const [writeReviewVisible, setWriteReviewVisible] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -565,13 +567,23 @@ export default function RestaurantDetailsScreen() {
                 <Text style={styles.emptyStateText}>No reviews yet</Text>
                 <Text style={styles.emptyStateSubtext}>Be the first to review</Text>
               </View>
-              <TouchableOpacity style={styles.writeReviewButton}>
+              <TouchableOpacity style={styles.writeReviewButton} onPress={() => setWriteReviewVisible(true)}>
                 <Text style={styles.writeReviewText}>Write a review</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
       </ScrollView>
+
+      <WriteReviewSheet
+        key={id}
+        visible={writeReviewVisible}
+        onClose={() => setWriteReviewVisible(false)}
+        restaurantId={id || ''}
+        restaurantName={restaurant?.name || 'Restaurant'}
+        restaurantPhoto={restaurant?.coverPhotoUrl}
+        restaurantDescription={restaurant?.description}
+      />
 
       {/* Image Modal */}
       <Modal
