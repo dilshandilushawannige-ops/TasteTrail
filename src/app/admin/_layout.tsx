@@ -11,7 +11,8 @@ export default function AdminTabLayout() {
   
   // Hide tab bar when on forms or other modal-like screens
   const shouldHideTabBar = pathname?.includes('/add-restaurant') || 
-                          pathname?.includes('/edit-restaurant');
+                          pathname?.includes('/edit-restaurant') ||
+                          pathname?.includes('/restaurant/');
 
   return (
     <Tabs
@@ -124,6 +125,14 @@ export default function AdminTabLayout() {
           href: null, // Hide from tab bar
           headerShown: false, // Uses custom header in the screen
         }}
+      />
+      <Tabs.Screen
+        name="restaurant/[id]/menu"
+        options={{ href: null, headerShown: false }}
+      />
+      <Tabs.Screen
+        name="restaurant/[id]/menu-item"
+        options={{ href: null, headerShown: false }}
       />
     </Tabs>
   );

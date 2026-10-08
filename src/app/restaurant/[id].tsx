@@ -525,7 +525,7 @@ export default function RestaurantDetailsScreen() {
               <TouchableOpacity
                 style={[styles.menuButton, { marginBottom: insets.bottom + 24 }]}
                 onPress={() => {
-                  // TODO: navigate to menu
+                  router.push({ pathname: '/restaurant/[id]/menu', params: { id: restaurant.id } });
                 }}
               >
                 <Text style={styles.menuButtonText}>View Menu</Text>
