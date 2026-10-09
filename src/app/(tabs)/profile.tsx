@@ -5,14 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Tabs } from 'expo-router';
 import { updateProfile } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
 import { RatingSummary } from '@/types/review';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    ActionSheetIOS,
     Image,
+    Platform,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -134,6 +136,45 @@ export default function ProfileScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchUserData();
+  };
+
+  const handleRecipeMenu = (recipe: UserRecipe) => {
+    const deleteRecipe = () => Alert.alert(
+      'Delete recipe?',
+      `"${recipe.name}" will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'recipes', recipe.id));
+              setUserRecipes(current => current.filter(item => item.id !== recipe.id));
+            } catch (error) {
+              console.error('Error deleting recipe:', error);
+              Alert.alert('Delete failed', 'Could not delete this recipe. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+    const actions = [
+      () => router.push({ pathname: '/(tabs)/addRecipe', params: { recipeId: recipe.id } }),
+      deleteRecipe,
+    ];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: recipe.name, options: ['Edit Recipe', 'Delete Recipe', 'Cancel'], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
+        index => actions[index]?.(),
+      );
+    } else {
+      Alert.alert(recipe.name, undefined, [
+        { text: 'Edit Recipe', onPress: actions[0] },
+        { text: 'Delete Recipe', style: 'destructive', onPress: deleteRecipe },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
   };
 
   const handleUploadPhoto = async () => {
@@ -334,7 +375,14 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.moreButton}>
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={(event) => {
+                event.stopPropagation();
+                handleRecipeMenu(recipe);
+              }}
+              accessibilityLabel={`Manage ${recipe.name}`}
+            >
               <Ionicons name="ellipsis-horizontal" size={20} color="#999" />
             </TouchableOpacity>
           </TouchableOpacity>

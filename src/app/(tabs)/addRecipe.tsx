@@ -1,9 +1,10 @@
 import { auth, db } from '@/firebaseConfig';
 import { styles } from '@/styles/addRecipe.styles';
 import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -24,6 +25,8 @@ import {
  * Allows users to add new traditional Sri Lankan recipes to Firestore
  */
 export default function AddRecipeScreen() {
+  const params = useLocalSearchParams<{ recipeId?: string | string[] }>();
+  const recipeId = Array.isArray(params.recipeId) ? params.recipeId[0] : params.recipeId;
   const [category, setCategory] = useState('');
   const [recipeName, setRecipeName] = useState('');
   const [ingredients, setIngredients] = useState('');
@@ -34,6 +37,7 @@ export default function AddRecipeScreen() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
 
   const user = auth.currentUser;
 
@@ -73,6 +77,28 @@ export default function AddRecipeScreen() {
 
     fetchUserName();
   }, [user]);
+
+  useEffect(() => {
+    if (!recipeId) return;
+    getDoc(doc(db, 'recipes', recipeId)).then(snapshot => {
+      if (!snapshot.exists() || snapshot.data().createdBy !== user?.uid) {
+        Alert.alert('Unable to edit recipe', 'You can only edit your own recipes.');
+        router.back();
+        return;
+      }
+      const data = snapshot.data();
+      setCategory(data.category || '');
+      setRecipeName(data.name || '');
+      setIngredients(data.ingredients || '');
+      setSteps(Array.isArray(data.steps) && data.steps.length ? data.steps : ['']);
+      setCreditPublicly(data.creditPublicly !== false);
+      setExistingImageUrl(typeof data.imageUrl === 'string' ? data.imageUrl : null);
+    }).catch(error => {
+      console.error('Error loading recipe for editing:', error);
+      Alert.alert('Unable to edit recipe', 'Could not load this recipe. Please try again.');
+      router.back();
+    });
+  }, [recipeId, user?.uid]);
 
   /**
    * Pick image from device gallery
@@ -208,21 +234,29 @@ export default function AddRecipeScreen() {
         }
       }
 
-      await addDoc(collection(db, 'recipes'), {
+      const recipeData = {
         category,
         name: recipeName.trim(),
         ingredients: ingredients.trim(),
         steps: filledSteps,
-        imageUrl,
+        imageUrl: imageUrl || existingImageUrl,
         creditPublicly,
         createdBy: user?.uid || null,
         createdByName: userName || 'Anonymous',
-        createdAt: serverTimestamp(),
-        likes: 0,
-        saves: 0,
-      });
+      };
 
-      Alert.alert('Success', 'Recipe saved successfully!', [
+      if (recipeId) {
+        await updateDoc(doc(db, 'recipes', recipeId), recipeData);
+      } else {
+        await addDoc(collection(db, 'recipes'), {
+          ...recipeData,
+          createdAt: serverTimestamp(),
+          likes: 0,
+          saves: 0,
+        });
+      }
+
+      Alert.alert('Success', recipeId ? 'Recipe updated successfully!' : 'Recipe saved successfully!', [
         {
           text: 'OK',
           onPress: () => {
@@ -231,7 +265,9 @@ export default function AddRecipeScreen() {
             setIngredients('');
             setSteps(['']);
             setImageUri(null);
+            setExistingImageUrl(null);
             setCreditPublicly(true);
+            if (recipeId) router.back();
           },
         },
       ]);

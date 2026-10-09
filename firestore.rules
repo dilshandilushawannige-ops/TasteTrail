@@ -83,6 +83,14 @@ service cloud.firestore {
     // Recipes are public to signed-in members, including their review target.
     match /recipes/{recipeId} {
       allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if request.auth != null
+        && resource.data.createdBy == request.auth.uid;
     }
 
     // Reviews are separate from restaurant documents, so members cannot edit restaurants.
