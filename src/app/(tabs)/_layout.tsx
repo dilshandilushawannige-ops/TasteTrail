@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AccountSettingsButton from '@/components/AccountSettingsButton';
+import AnnouncementNotifications from '@/components/AnnouncementNotifications';
 import { Tabs, router } from 'expo-router';
 import { Image, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 
@@ -7,9 +8,7 @@ function HeaderRight({ showNotification = true }: { showNotification?: boolean }
   return (
     <View style={styles.headerRight}>
       {showNotification && (
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="notifications-outline" size={24} color="#333" />
-        </TouchableOpacity>
+        <AnnouncementNotifications />
       )}
       <TouchableOpacity
         style={styles.profileButton}

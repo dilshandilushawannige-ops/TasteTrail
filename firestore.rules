@@ -95,6 +95,40 @@ service cloud.firestore {
       match /favourites/{favouriteId} {
         allow read, delete: if isOwner() && accountAccessAllowed();
       }
+
+      // Read status is private to each user; opening the bell alone does not mark messages read.
+      match /announcementReads/{announcementId} {
+        allow read: if isOwner() && accountAccessAllowed();
+        allow create, update: if isOwner() && accountAccessAllowed()
+          && exists(/databases/$(database)/documents/announcements/$(announcementId))
+          && request.resource.data.keys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+      }
+    }
+
+    // Global announcements are managed by admins and visible to authenticated, unblocked users.
+    match /announcements/{announcementId} {
+      function announcementAdmin() {
+        return request.auth != null && accountAccessAllowed() && (
+          request.auth.token.get('admin', false) == true || request.auth.token.get('admin', false) == 'true'
+          || request.auth.token.get('isAdmin', false) == true || request.auth.token.get('role', '') == 'admin'
+          || (request.auth.token.get('roles', []) is list && request.auth.token.get('roles', []).hasAny(['admin'])));
+      }
+      allow read: if request.auth != null && accountAccessAllowed();
+      allow create: if announcementAdmin()
+        && request.resource.data.keys().hasOnly(['title', 'message', 'audience', 'createdBy', 'createdAt'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 1000
+        && request.resource.data.audience == 'all'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if announcementAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'message', 'updatedAt', 'updatedBy'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 1000
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if announcementAdmin();
     }
 
     // Reviews are separate from restaurant documents, so members cannot edit restaurants.
