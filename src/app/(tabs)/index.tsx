@@ -15,6 +15,8 @@ import {
   View,
 } from 'react-native';
 import { useSavedRecipes } from '@/hooks/useSavedRecipes';
+import { RatingSummary } from '@/types/review';
+import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
 
 interface Recipe {
   id: string;
@@ -28,6 +30,14 @@ interface Recipe {
   createdAt: any;
   likes: number;
   saves: number;
+}
+
+function timestampMillis(value: unknown): number {
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  if (value instanceof Date) return value.getTime();
+  return typeof value === 'number' ? value : 0;
 }
 
 interface Creator {
@@ -53,6 +63,8 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [saveToast, setSaveToast] = useState('');
+  const [recipeRatings, setRecipeRatings] = useState<Record<string, RatingSummary>>({});
+  const [rankingTime] = useState(() => Date.now());
   const { isSaved, toggle } = useSavedRecipes();
 
   const toggleRecipe = async (recipeId: string) => {
@@ -103,6 +115,14 @@ export default function HomeScreen() {
     fetchRecipes();
   }, []);
 
+  useEffect(() => {
+    return subscribeToRecipeRatingSummaries(setRecipeRatings, error => {
+      console.error('Error loading recipe ratings:', error);
+    });
+  }, []);
+
+  const ratingFor = (recipe: Recipe) => recipeRatings[recipe.id];
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchRecipes();
@@ -119,7 +139,23 @@ export default function HomeScreen() {
     return matchesCategory && matchesSearch;
   });
 
-  const trendingRecipe = recipes[0];
+  const trendingRecipe = (() => {
+    const ranked = recipes.map(recipe => {
+      const summary = ratingFor(recipe);
+      const reviewCount = summary?.totalReviews || 0;
+      const averageRating = summary?.averageRating || 0;
+      const saves = Number(recipe.saves) || 0;
+      const cooks = Number(recipe.likes) || 0;
+      const ageInDays = Math.max(0, (rankingTime - timestampMillis(recipe.createdAt)) / 86400000);
+      const freshnessBonus = Math.max(0, 10 - ageInDays / 3);
+      const activity = saves + cooks + reviewCount;
+      const score = saves * 3 + cooks * 2 + reviewCount * 4 + averageRating * 5 + freshnessBonus;
+      return { recipe, activity, score };
+    });
+    const activeRecipes = ranked.filter(item => item.activity > 0);
+    return (activeRecipes.length ? activeRecipes : ranked)
+      .sort((a, b) => b.score - a.score)[0]?.recipe;
+  })();
   const recentRecipes = filteredRecipes.slice(0, 6);
 
   if (loading) {
@@ -188,8 +224,8 @@ export default function HomeScreen() {
               <View style={styles.trendingBadges}>
                 <View style={styles.ratingBadge}>
                   <Ionicons name="star" size={14} color="#FFD700" />
-                  <Text style={styles.ratingText}>4.9</Text>
-                  <Text style={styles.ratingCount}>(128)</Text>
+                  <Text style={styles.ratingText}>{ratingFor(trendingRecipe)?.totalReviews ? ratingFor(trendingRecipe)!.averageRating.toFixed(1) : 'New'}</Text>
+                  {!!ratingFor(trendingRecipe)?.totalReviews && <Text style={styles.ratingCount}>({ratingFor(trendingRecipe)!.totalReviews})</Text>}
                 </View>
               </View>
             </View>
@@ -327,7 +363,7 @@ export default function HomeScreen() {
               )}
               <View style={styles.recentRating}>
                 <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.recentRatingText}>4.9</Text>
+                <Text style={styles.recentRatingText}>{ratingFor(recipe)?.totalReviews ? ratingFor(recipe)!.averageRating.toFixed(1) : 'New'}</Text>
               </View>
               <View style={styles.recentContent}>
                 <Text style={styles.recentTitle} numberOfLines={1}>

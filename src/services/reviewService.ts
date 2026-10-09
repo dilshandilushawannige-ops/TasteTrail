@@ -7,7 +7,8 @@ import { auth, db } from '@/firebaseConfig';
 import { Review, ReviewMedia, RatingSummary, CreateReviewData, UpdateReviewData } from '@/types/review';
 
 const COLLECTION_NAME = 'reviews';
-const reviewQuery = (restaurantId: string) => query(collection(db, COLLECTION_NAME), where('restaurantId', '==', restaurantId));
+const reviewQuery = (targetId: string, targetType: 'restaurant' | 'recipe') =>
+  query(collection(db, COLLECTION_NAME), where(`${targetType}Id`, '==', targetId));
 const fromDocument = (snapshot: QueryDocumentSnapshot<DocumentData>): Review => {
   const data = snapshot.data();
   return { ...data, id: snapshot.id, createdAt: data.createdAt?.toDate?.() || new Date(),
@@ -21,31 +22,62 @@ export function reviewErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unable to load reviews. Please try again.';
 }
 export async function getReviewsByRestaurant(restaurantId: string): Promise<Review[]> {
-  return newestFirst((await getDocs(reviewQuery(restaurantId))).docs.map(fromDocument));
+  return newestFirst((await getDocs(reviewQuery(restaurantId, 'restaurant'))).docs.map(fromDocument));
 }
 export function subscribeToReviews(restaurantId: string, callback: (reviews: Review[]) => void, onError?: (error: Error) => void): () => void {
-  return onSnapshot(reviewQuery(restaurantId), snapshot => callback(newestFirst(snapshot.docs.map(fromDocument))),
+  return onSnapshot(reviewQuery(restaurantId, 'restaurant'), snapshot => callback(newestFirst(snapshot.docs.map(fromDocument))),
     error => onError?.(new Error(reviewErrorMessage(error))));
+}
+export async function getReviewsByRecipe(recipeId: string): Promise<Review[]> {
+  return newestFirst((await getDocs(reviewQuery(recipeId, 'recipe'))).docs.map(fromDocument));
+}
+export function subscribeToRecipeReviews(recipeId: string, callback: (reviews: Review[]) => void, onError?: (error: Error) => void): () => void {
+  return onSnapshot(reviewQuery(recipeId, 'recipe'), snapshot => callback(newestFirst(snapshot.docs.map(fromDocument))),
+    error => onError?.(new Error(reviewErrorMessage(error))));
+}
+export function subscribeToRecipeRatingSummaries(
+  callback: (summaries: Record<string, RatingSummary>) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return onSnapshot(collection(db, COLLECTION_NAME), snapshot => {
+    const reviewsByRecipe = new Map<string, Review[]>();
+    snapshot.docs.map(fromDocument).forEach(review => {
+      if (!review.recipeId) return;
+      const reviews = reviewsByRecipe.get(review.recipeId) || [];
+      reviews.push(review);
+      reviewsByRecipe.set(review.recipeId, reviews);
+    });
+    const summaries: Record<string, RatingSummary> = {};
+    reviewsByRecipe.forEach((reviews, recipeId) => {
+      summaries[recipeId] = summarizeReviews(reviews);
+    });
+    callback(summaries);
+  }, error => onError?.(new Error(reviewErrorMessage(error))));
 }
 export async function addReview(data: CreateReviewData): Promise<string> {
   const user = auth.currentUser;
   if (!user || user.uid !== data.userId) throw new Error('Please sign in before submitting your review.');
-  if (!data.restaurantId || !Number.isInteger(data.rating) || data.rating < 1 || data.rating > 5 || data.comment.trim().length < 10 || data.comment.length > 580) {
+  const targetType = data.recipeId ? 'recipe' : data.restaurantId ? 'restaurant' : null;
+  const targetId = data.recipeId || data.restaurantId;
+  if (!targetId || !targetType || !Number.isInteger(data.rating) || data.rating < 1 || data.rating > 5 || data.comment.trim().length < 10 || data.comment.length > 580) {
     throw new Error('Select a rating and write a review between 10 and 580 characters.');
   }
   if ((data.media?.length || 0) > 6 || data.media?.some(item => !item.url.startsWith('https://'))) throw new Error('Please upload up to six photos or videos.');
   const profile = data.anonymous ? null : await getDoc(doc(db, 'users', user.uid));
   const userName = data.anonymous ? 'Anonymous' : user.displayName || profile?.data()?.name || 'TasteTrail member';
-  const ref = doc(db, COLLECTION_NAME, `${data.restaurantId}_${user.uid}`);
+  const ref = doc(db, COLLECTION_NAME, `${targetId}_${user.uid}`);
   try {
     await runTransaction(db, async transaction => {
       const existing = await transaction.get(ref);
-      if (existing.exists()) throw new Error('You have already reviewed this restaurant.');
+      if (existing.exists()) throw new Error(`You have already reviewed this ${targetType}.`);
       transaction.set(ref, {
-        restaurantId: data.restaurantId, userId: user.uid, userName,
+        ...(targetType === 'recipe' ? { recipeId: targetId } : { restaurantId: targetId }),
+        userId: user.uid, userName,
         userAvatar: data.anonymous ? '' : user.photoURL || '',
-        rating: data.rating, comment: data.comment.trim(), diningType: data.diningType || 'Dine-in',
-        mealTime: data.mealTime || 'Lunch', visitedWith: data.visitedWith || 'Family',
+        rating: data.rating, comment: data.comment.trim(),
+        ...(targetType === 'restaurant'
+          ? { diningType: data.diningType || 'Dine-in', mealTime: data.mealTime || 'Lunch', visitedWith: data.visitedWith || 'Family' }
+          : { mealTime: data.mealTime || 'Lunch', wouldMakeAgain: data.wouldMakeAgain || 'Yes' }),
         anonymous: !!data.anonymous, media: data.media || [], helpfulUserIds: [], createdAt: serverTimestamp(),
       });
     });
@@ -66,9 +98,13 @@ export async function updateReview(reviewId: string, data: UpdateReviewData): Pr
       const content = {
         rating: data.rating ?? current.rating,
         comment: (data.comment ?? current.comment).trim(),
-        diningType: data.diningType ?? current.diningType ?? 'Dine-in',
-        mealTime: data.mealTime ?? current.mealTime ?? 'Lunch',
-        visitedWith: data.visitedWith ?? current.visitedWith ?? 'Family',
+        ...(current.recipeId
+          ? { mealTime: data.mealTime ?? current.mealTime ?? 'Lunch', wouldMakeAgain: data.wouldMakeAgain ?? current.wouldMakeAgain ?? 'Yes' }
+          : {
+            diningType: data.diningType ?? current.diningType ?? 'Dine-in',
+            mealTime: data.mealTime ?? current.mealTime ?? 'Lunch',
+            visitedWith: data.visitedWith ?? current.visitedWith ?? 'Family',
+          }),
         anonymous: data.anonymous ?? current.anonymous ?? false,
         media: data.media ?? current.media ?? [],
       };

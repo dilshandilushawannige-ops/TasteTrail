@@ -10,6 +10,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ReviewCard } from '@/components/reviews/ReviewCard';
+import { WriteReviewSheet } from '@/components/reviews/WriteReviewSheet';
+import { useRecipeReviews } from '@/hooks/useRecipeReviews';
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
@@ -85,6 +88,8 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   const [clock, setClock] = useState(() => Date.now());
   const [showVoicePlayer, setShowVoicePlayer] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [writeReviewVisible, setWriteReviewVisible] = useState(false);
+  const { reviews, loading: reviewsLoading, error: reviewsError, refresh: refreshReviews, submitReview } = useRecipeReviews(recipeId || '');
   const [confirmCookAgain, setConfirmCookAgain] = useState(false);
   const lock = useRef(false);
   const generation = useRef(0);
@@ -583,6 +588,32 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
               </View>
             </>}
           </View>}
+          <View style={styles.card}>
+            <Text style={styles.heading}>Recipe reviews</Text>
+            {reviewsLoading && <ActivityIndicator size="small" color="#E8505B" />}
+            {!!reviewsError && <>
+              <Text style={styles.muted}>{reviewsError}</Text>
+              <Button title="Retry reviews" secondary onPress={() => void refreshReviews()} />
+            </>}
+            {!reviewsLoading && !reviewsError && reviews.length === 0 && (
+              <Text style={styles.muted}>No reviews yet. Share how this recipe turned out.</Text>
+            )}
+            {reviews.map(review => (
+              <ReviewCard key={review.id} review={review} restaurantName={recipe.name}
+                restaurantPhoto={displayImageUrl} />
+            ))}
+            <Button title="Write a review" onPress={() => setWriteReviewVisible(true)} disabled={blocked} />
+          </View>
+          <WriteReviewSheet
+            key={recipe.id}
+            visible={writeReviewVisible}
+            onClose={() => setWriteReviewVisible(false)}
+            onSubmit={submitReview}
+            recipeId={recipe.id}
+            restaurantName={recipe.name}
+            restaurantPhoto={displayImageUrl}
+            targetLabel="recipe"
+          />
         </>}
       </ScrollView>
     </SafeAreaView>

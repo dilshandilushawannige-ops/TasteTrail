@@ -6,6 +6,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, Tabs } from 'expo-router';
 import { updateProfile } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
+import { RatingSummary } from '@/types/review';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -46,6 +48,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(auth.currentUser?.photoURL || null);
+  const [recipeRatings, setRecipeRatings] = useState<Record<string, RatingSummary>>({});
 
   const user = auth.currentUser;
 
@@ -122,6 +125,12 @@ export default function ProfileScreen() {
     fetchUserData();
   }, [user]);
 
+  useEffect(() => {
+    return subscribeToRecipeRatingSummaries(setRecipeRatings, error => {
+      console.error('Error loading profile recipe ratings:', error);
+    });
+  }, []);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchUserData();
@@ -190,7 +199,17 @@ export default function ProfileScreen() {
   }
 
   const totalSaves = userRecipes.reduce((sum, recipe) => sum + (recipe.saves || 0), 0);
-  const averageRating = userRecipes.length > 0 ? 4.9 : 0;
+  const ratingTotals = userRecipes.reduce((totals, recipe) => {
+    const summary = recipeRatings[recipe.id];
+    if (!summary) return totals;
+    return {
+      totalPoints: totals.totalPoints + summary.averageRating * summary.totalReviews,
+      totalReviews: totals.totalReviews + summary.totalReviews,
+    };
+  }, { totalPoints: 0, totalReviews: 0 });
+  const averageRating = ratingTotals.totalReviews > 0
+    ? ratingTotals.totalPoints / ratingTotals.totalReviews
+    : 0;
 
   return (
     <ScrollView
@@ -291,7 +310,11 @@ export default function ProfileScreen() {
 
             <View style={styles.recipeRating}>
               <Ionicons name="star" size={12} color="#FFD700" />
-              <Text style={styles.recipeRatingText}>4.9</Text>
+              <Text style={styles.recipeRatingText}>
+                {recipeRatings[recipe.id]?.totalReviews
+                  ? recipeRatings[recipe.id].averageRating.toFixed(1)
+                  : 'New'}
+              </Text>
             </View>
 
             <View style={styles.recipeContent}>

@@ -63,7 +63,7 @@ export function ReviewCard({ review, signatureDish, restaurantName = 'Restaurant
         <TouchableOpacity accessibilityLabel="Update your review" disabled={busy} onPress={() => { setMenuOpen(false); setEditing(true); }}><Text style={styles.selectedText}>Update</Text></TouchableOpacity>
         <TouchableOpacity accessibilityLabel="Delete your review" disabled={busy} onPress={() => perform(() => deleteReview(review.id))}><Text style={styles.selectedText}>Delete</Text></TouchableOpacity>
       </View>}
-      <View style={styles.tags}>{[review.diningType, review.mealTime].filter(Boolean).map((tag, index) => <View key={`${tag}-${index}`} style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>)}</View>
+      <View style={styles.tags}>{[review.recipeId ? undefined : review.diningType, review.mealTime, review.recipeId && review.wouldMakeAgain ? `Make again: ${review.wouldMakeAgain}` : undefined].filter(Boolean).map((tag, index) => <View key={`${tag}-${index}`} style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>)}</View>
       <Text style={styles.comment}>{review.comment}</Text>
       {!!review.media?.length && <View style={styles.attachments}>
         {review.media.map((media, index) => <TouchableOpacity key={`${media.url}-${index}`} style={styles.thumbnail} accessibilityLabel={`Open review ${media.type} ${index + 1}`} onPress={() => openMedia(media)}>
@@ -84,8 +84,9 @@ export function ReviewCard({ review, signatureDish, restaurantName = 'Restaurant
       </View>}
       {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
       {editing && uid === review.userId && <WriteReviewSheet
-        visible initialReview={review} restaurantId={review.restaurantId}
+        visible initialReview={review} restaurantId={review.restaurantId} recipeId={review.recipeId}
         restaurantName={restaurantName} restaurantPhoto={restaurantPhoto} restaurantDescription={restaurantDescription}
+        targetLabel={review.recipeId ? 'recipe' : 'restaurant'}
         onClose={() => setEditing(false)} onSubmit={data => updateReview(review.id, data)}
       />}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>

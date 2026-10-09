@@ -11,7 +11,8 @@ import type { Review, ReviewMedia } from '@/types/review';
 export interface ReviewFormData extends CreateReviewData {
   diningType: string;
   mealTime: string;
-  visitedWith: string;
+  visitedWith?: string;
+  wouldMakeAgain?: 'Yes' | 'Maybe' | 'No';
   anonymous: boolean;
   media: ReviewMedia[];
 }
@@ -19,17 +20,19 @@ interface WriteReviewSheetProps {
   visible: boolean;
   onClose: () => void;
   onSubmit?: (review: ReviewFormData) => Promise<void>;
-  restaurantId: string;
+  restaurantId?: string;
+  recipeId?: string;
   restaurantName: string;
   restaurantPhoto?: string;
   restaurantDescription?: string;
+  targetLabel?: string;
   initialReview?: Review;
 }
 const MAX_CHARACTERS = 580;
 const MAX_MEDIA = 6;
 const ratingLabels = ['Select your rating', 'Poor', 'Fair', 'Good', 'Great', 'Outstanding!'];
 
-export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, restaurantName, restaurantPhoto, restaurantDescription, initialReview }: WriteReviewSheetProps) {
+export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, recipeId, restaurantName, restaurantPhoto, restaurantDescription, targetLabel = 'restaurant', initialReview }: WriteReviewSheetProps) {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const pickingRef = useRef(false);
@@ -40,6 +43,7 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
   const [diningType, setDiningType] = useState(initialReview?.diningType || 'Dine-in');
   const [mealTime, setMealTime] = useState(initialReview?.mealTime || 'Lunch');
   const [visitedWith, setVisitedWith] = useState(initialReview?.visitedWith || 'Family');
+  const [wouldMakeAgain, setWouldMakeAgain] = useState<'Yes' | 'Maybe' | 'No'>(initialReview?.wouldMakeAgain || 'Yes');
   const [anonymous, setAnonymous] = useState(initialReview?.anonymous || false);
   const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>((initialReview?.media || []).map(item => ({
     uri: item.url, type: item.type, width: 0, height: 0,
@@ -91,7 +95,7 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
         }
       }
       const uploadedMedia = media.map(asset => uploadedMediaRef.current.get(asset.uri)!);
-      await onSubmit({ restaurantId, userId: user.uid, userName: anonymous ? 'Anonymous' : user.displayName || 'TasteTrail member', rating, comment: comment.trim(), diningType, mealTime, visitedWith, anonymous, media: uploadedMedia });
+      await onSubmit({ ...(recipeId ? { recipeId } : { restaurantId: restaurantId! }), userId: user.uid, userName: anonymous ? 'Anonymous' : user.displayName || 'TasteTrail member', rating, comment: comment.trim(), ...(recipeId ? { mealTime, wouldMakeAgain } : { diningType, mealTime, visitedWith }), anonymous, media: uploadedMedia });
       uploadedMediaRef.current.clear();
       setRating(0); setComment(''); setMedia([]); setAnonymous(false);
       showFeedback(initialReview ? 'Review updated' : 'Review submitted', 'Thank you for sharing your experience!');
@@ -119,22 +123,24 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
           </View>}
           <View style={[styles.card, styles.restaurantCard]}>
             {restaurantPhoto ? <Image source={{ uri: restaurantPhoto }} style={styles.restaurantPhoto} /> : <View style={[styles.restaurantPhoto, styles.photoPlaceholder]}><Ionicons name="restaurant" size={25} color="#B5213B" /></View>}
-            <View style={styles.restaurantInfo}><Text style={styles.restaurantName}>{restaurantName}</Text>{!!restaurantDescription && <Text numberOfLines={2} style={styles.description}>{restaurantDescription}</Text>}<Text style={styles.supportText}>SHARING EXPERIENCE SUPPORTS LOCAL DINING</Text></View>
+            <View style={styles.restaurantInfo}><Text style={styles.restaurantName}>{restaurantName}</Text>{!!restaurantDescription && <Text numberOfLines={2} style={styles.description}>{restaurantDescription}</Text>}<Text style={styles.supportText}>SHARING YOUR {targetLabel.toUpperCase()} EXPERIENCE HELPS THE COMMUNITY</Text></View>
           </View>
           <View style={[styles.card, styles.ratingCard]}>
-            <Text style={styles.label}>HOW WAS YOUR VISIT?</Text><View style={styles.stars}>
+            <Text style={styles.label}>{targetLabel === 'recipe' ? 'HOW WAS THIS RECIPE?' : 'HOW WAS YOUR VISIT?'}</Text><View style={styles.stars}>
               {[1, 2, 3, 4, 5].map(star => <TouchableOpacity key={star} disabled={submitting} onPress={() => setRating(star)} accessibilityLabel={`${star} star${star === 1 ? '' : 's'}`} accessibilityRole="radio" accessibilityState={{ checked: rating === star }} style={styles.starButton}><Ionicons name={star <= rating ? 'star' : 'star-outline'} size={31} color="#F59A08" /></TouchableOpacity>)}
             </View><Text style={styles.ratingText}>{rating ? `${rating.toFixed(1)} - ${ratingLabels[rating]}` : ratingLabels[0]}</Text><Text style={styles.ratingHint}>{rating ? 'Share what stood out during your visit.' : 'Tap a star to rate your experience.'}</Text>
           </View>
           <View style={styles.card}>
-            {choices('DINING TYPE', ['Dine-in', 'Takeaway', 'Delivery'], diningType, setDiningType)}
+            {targetLabel !== 'recipe' && choices('DINING TYPE', ['Dine-in', 'Takeaway', 'Delivery'], diningType, setDiningType)}
             {choices('MEAL TIME', ['Breakfast', 'Lunch', 'Dinner'], mealTime, setMealTime)}
-            {choices('VISITED WITH', ['Solo', 'Couple', 'Family', 'Friends'], visitedWith, setVisitedWith)}
+            {targetLabel === 'recipe'
+              ? choices('WOULD YOU MAKE THIS AGAIN?', ['Yes', 'Maybe', 'No'], wouldMakeAgain, setWouldMakeAgain)
+              : choices('VISITED WITH', ['Solo', 'Couple', 'Family', 'Friends'], visitedWith, setVisitedWith)}
           </View>
           <View style={styles.card}>
             <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your Review</Text><Text style={styles.count}>{comment.length}/{MAX_CHARACTERS}</Text></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.prompts}>
-              {['Recommended dishes?', 'Wait time?', 'Parking?'].map(prompt => <TouchableOpacity key={prompt} disabled={submitting} style={styles.prompt} onPress={() => { setComment(current => `${current}${current.trim() ? '\n' : ''}${prompt} `.slice(0, MAX_CHARACTERS)); inputRef.current?.focus(); }}><Text style={styles.promptText}>+ {prompt}</Text></TouchableOpacity>)}
+              {(targetLabel === 'recipe' ? ['What did you change?', 'Would you make it again?', 'What stood out?'] : ['Recommended dishes?', 'Wait time?', 'Parking?']).map(prompt => <TouchableOpacity key={prompt} disabled={submitting} style={styles.prompt} onPress={() => { setComment(current => `${current}${current.trim() ? '\n' : ''}${prompt} `.slice(0, MAX_CHARACTERS)); inputRef.current?.focus(); }}><Text style={styles.promptText}>+ {prompt}</Text></TouchableOpacity>)}
             </ScrollView>
             <TextInput ref={inputRef} style={styles.commentInput} multiline maxLength={MAX_CHARACTERS} editable={!submitting} placeholder="Share the dishes you loved and what made your visit memorable..." placeholderTextColor="#8A8C9D" value={comment} onChangeText={setComment} textAlignVertical="top" accessibilityLabel="Your review" />
           </View>
