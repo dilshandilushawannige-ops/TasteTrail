@@ -5,6 +5,7 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   RefreshControl,
   ScrollView,
@@ -15,6 +16,8 @@ import {
   View,
 } from 'react-native';
 import { useSavedRecipes } from '@/hooks/useSavedRecipes';
+import { RatingSummary } from '@/types/review';
+import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
 
 interface Recipe {
   id: string;
@@ -28,6 +31,14 @@ interface Recipe {
   createdAt: any;
   likes: number;
   saves: number;
+}
+
+function timestampMillis(value: unknown): number {
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  if (value instanceof Date) return value.getTime();
+  return typeof value === 'number' ? value : 0;
 }
 
 interface Creator {
@@ -45,6 +56,15 @@ const categories = [
   { id: 'sweets', name: 'Village Sweets' },
 ];
 
+const categoryIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  all: 'grid-outline',
+  curries: 'flame-outline',
+  hoppers: 'ellipse-outline',
+  coastal: 'fish-outline',
+  heritage: 'leaf-outline',
+  sweets: 'ice-cream-outline',
+};
+
 export default function HomeScreen() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -53,6 +73,9 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [saveToast, setSaveToast] = useState('');
+  const [recipeRatings, setRecipeRatings] = useState<Record<string, RatingSummary>>({});
+  const [rankingTime] = useState(() => Date.now());
+  const [categoryTransition] = useState(() => new Animated.Value(1));
   const { isSaved, toggle } = useSavedRecipes();
 
   const toggleRecipe = async (recipeId: string) => {
@@ -103,9 +126,38 @@ export default function HomeScreen() {
     fetchRecipes();
   }, []);
 
+  useEffect(() => {
+    return subscribeToRecipeRatingSummaries(setRecipeRatings, error => {
+      console.error('Error loading recipe ratings:', error);
+    });
+  }, []);
+
+  const ratingFor = (recipe: Recipe) => recipeRatings[recipe.id];
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchRecipes();
+  };
+
+  const selectCategory = (categoryId: string) => {
+    if (categoryId === selectedCategory) return;
+
+    Animated.timing(categoryTransition, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setSelectedCategory(categoryId);
+      Animated.spring(categoryTransition, {
+        toValue: 1,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }).start();
+    });
   };
 
   const filteredRecipes = recipes.filter((recipe) => {
@@ -119,7 +171,23 @@ export default function HomeScreen() {
     return matchesCategory && matchesSearch;
   });
 
-  const trendingRecipe = recipes[0];
+  const trendingRecipe = (() => {
+    const ranked = recipes.map(recipe => {
+      const summary = ratingFor(recipe);
+      const reviewCount = summary?.totalReviews || 0;
+      const averageRating = summary?.averageRating || 0;
+      const saves = Number(recipe.saves) || 0;
+      const cooks = Number(recipe.likes) || 0;
+      const ageInDays = Math.max(0, (rankingTime - timestampMillis(recipe.createdAt)) / 86400000);
+      const freshnessBonus = Math.max(0, 10 - ageInDays / 3);
+      const activity = saves + cooks + reviewCount;
+      const score = saves * 3 + cooks * 2 + reviewCount * 4 + averageRating * 5 + freshnessBonus;
+      return { recipe, activity, score };
+    });
+    const activeRecipes = ranked.filter(item => item.activity > 0);
+    return (activeRecipes.length ? activeRecipes : ranked)
+      .sort((a, b) => b.score - a.score)[0]?.recipe;
+  })();
   const recentRecipes = filteredRecipes.slice(0, 6);
 
   if (loading) {
@@ -188,8 +256,8 @@ export default function HomeScreen() {
               <View style={styles.trendingBadges}>
                 <View style={styles.ratingBadge}>
                   <Ionicons name="star" size={14} color="#FFD700" />
-                  <Text style={styles.ratingText}>4.9</Text>
-                  <Text style={styles.ratingCount}>(128)</Text>
+                  <Text style={styles.ratingText}>{ratingFor(trendingRecipe)?.totalReviews ? ratingFor(trendingRecipe)!.averageRating.toFixed(1) : 'New'}</Text>
+                  {!!ratingFor(trendingRecipe)?.totalReviews && <Text style={styles.ratingCount}>({ratingFor(trendingRecipe)!.totalReviews})</Text>}
                 </View>
               </View>
             </View>
@@ -246,7 +314,12 @@ export default function HomeScreen() {
           <Text style={styles.dishCount}>{filteredRecipes.length} dishes</Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesScroll}
+          contentContainerStyle={styles.categoryPillsContent}
+        >
           {categories.map((category) => (
             <TouchableOpacity
               key={category.id}
@@ -254,8 +327,13 @@ export default function HomeScreen() {
                 styles.categoryPill,
                 selectedCategory === category.id && styles.categoryPillActive,
               ]}
-              onPress={() => setSelectedCategory(category.id)}
+              onPress={() => selectCategory(category.id)}
             >
+              <Ionicons
+                name={categoryIcons[category.id]}
+                size={16}
+                color={selectedCategory === category.id ? '#FFF' : '#1E293B'}
+              />
               <Text
                 style={[
                   styles.categoryPillText,
@@ -268,38 +346,50 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryCards}>
-          {recentRecipes.slice(0, 3).map((recipe) => (
-            <TouchableOpacity
-              key={recipe.id}
-              style={styles.categoryCard}
-              onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
-            >
-              {recipe.imageUrl ? (
-                <Image source={{ uri: recipe.imageUrl }} style={styles.categoryCardImage} />
-              ) : (
-                <View style={[styles.categoryCardImage, styles.placeholderCategoryImage]}>
-                  <Ionicons name="restaurant" size={32} color="#E8505B" />
+        <Animated.View
+          style={{
+            opacity: categoryTransition,
+            transform: [{
+              translateY: categoryTransition.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            }],
+          }}
+        >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryCards}>
+            {recentRecipes.slice(0, 3).map((recipe) => (
+              <TouchableOpacity
+                key={recipe.id}
+                style={styles.categoryCard}
+                onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+              >
+                {recipe.imageUrl ? (
+                  <Image source={{ uri: recipe.imageUrl }} style={styles.categoryCardImage} />
+                ) : (
+                  <View style={[styles.categoryCardImage, styles.placeholderCategoryImage]}>
+                    <Ionicons name="restaurant" size={32} color="#E8505B" />
+                  </View>
+                )}
+                <Text style={styles.categoryCardTitle} numberOfLines={2}>
+                  {recipe.name}
+                </Text>
+                <View style={styles.categoryCardFooter}>
+                  <Text style={styles.categoryCardTime}>TIME</Text>
+                  <TouchableOpacity
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      void toggleRecipe(recipe.id);
+                    }}
+                  >
+                    <Ionicons name={isSaved(recipe.id) ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved(recipe.id) ? '#E8505B' : '#999'} />
+                  </TouchableOpacity>
                 </View>
-              )}
-              <Text style={styles.categoryCardTitle} numberOfLines={2}>
-                {recipe.name}
-              </Text>
-              <View style={styles.categoryCardFooter}>
-                <Text style={styles.categoryCardTime}>TIME</Text>
-                <TouchableOpacity
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    void toggleRecipe(recipe.id);
-                  }}
-                >
-                  <Ionicons name={isSaved(recipe.id) ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved(recipe.id) ? '#E8505B' : '#999'} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.categoryCardDuration}>25 Mins</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <Text style={styles.categoryCardDuration}>25 Mins</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Animated.View>
       </View>
 
       {/* Recent Recipe */}
@@ -327,7 +417,7 @@ export default function HomeScreen() {
               )}
               <View style={styles.recentRating}>
                 <Ionicons name="star" size={12} color="#FFD700" />
-                <Text style={styles.recentRatingText}>4.9</Text>
+                <Text style={styles.recentRatingText}>{ratingFor(recipe)?.totalReviews ? ratingFor(recipe)!.averageRating.toFixed(1) : 'New'}</Text>
               </View>
               <View style={styles.recentContent}>
                 <Text style={styles.recentTitle} numberOfLines={1}>
@@ -424,9 +514,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
-    borderRadius: 12,
+    borderRadius: 28,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
+    minHeight: 42,
   },
   searchIcon: {
     marginRight: 8,
@@ -439,7 +530,7 @@ const styles = StyleSheet.create({
   filterButton: {
     backgroundColor: '#E8505B',
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 20,
     marginLeft: 8,
   },
 
@@ -620,20 +711,26 @@ const styles = StyleSheet.create({
   categoriesScroll: {
     marginBottom: 16,
   },
+  categoryPillsContent: {
+    gap: 10,
+  },
   categoryPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: '#F5F5F5',
-    marginRight: 8,
+    gap: 8,
   },
   categoryPillActive: {
     backgroundColor: '#E8505B',
   },
   categoryPillText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 12,
+    fontWeight: 'normal',
+    color: '#1E293B',
   },
   categoryPillTextActive: {
     color: '#FFF',

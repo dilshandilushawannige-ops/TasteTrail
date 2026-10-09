@@ -9,7 +9,8 @@ export interface ReviewMedia {
 
 export interface Review {
   id: string;
-  restaurantId: string;
+  restaurantId?: string;
+  recipeId?: string;
   userId: string;
   userName: string;
   userAvatar?: string;
@@ -20,6 +21,7 @@ export interface Review {
   diningType?: string;
   mealTime?: string;
   visitedWith?: string;
+  wouldMakeAgain?: 'Yes' | 'Maybe' | 'No';
   anonymous?: boolean;
   media?: ReviewMedia[];
   helpfulUserIds?: string[];
@@ -39,5 +41,5 @@ export interface RatingSummary {
 
 export type CreateReviewData = Omit<Review, 'id' | 'createdAt' | 'updatedAt'>;
 export type UpdateReviewData = Partial<Pick<Review,
-  'rating' | 'comment' | 'diningType' | 'mealTime' | 'visitedWith' | 'anonymous' | 'media'
+  'rating' | 'comment' | 'diningType' | 'mealTime' | 'visitedWith' | 'wouldMakeAgain' | 'anonymous' | 'media'
 >>;

@@ -5,12 +5,16 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Tabs } from 'expo-router';
 import { updateProfile } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
+import { RatingSummary } from '@/types/review';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    ActionSheetIOS,
     Image,
+    Platform,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -46,6 +50,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(auth.currentUser?.photoURL || null);
+  const [recipeRatings, setRecipeRatings] = useState<Record<string, RatingSummary>>({});
 
   const user = auth.currentUser;
 
@@ -122,9 +127,54 @@ export default function ProfileScreen() {
     fetchUserData();
   }, [user]);
 
+  useEffect(() => {
+    return subscribeToRecipeRatingSummaries(setRecipeRatings, error => {
+      console.error('Error loading profile recipe ratings:', error);
+    });
+  }, []);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchUserData();
+  };
+
+  const handleRecipeMenu = (recipe: UserRecipe) => {
+    const deleteRecipe = () => Alert.alert(
+      'Delete recipe?',
+      `"${recipe.name}" will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'recipes', recipe.id));
+              setUserRecipes(current => current.filter(item => item.id !== recipe.id));
+            } catch (error) {
+              console.error('Error deleting recipe:', error);
+              Alert.alert('Delete failed', 'Could not delete this recipe. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+    const actions = [
+      () => router.push({ pathname: '/(tabs)/addRecipe', params: { recipeId: recipe.id } }),
+      deleteRecipe,
+    ];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: recipe.name, options: ['Edit Recipe', 'Delete Recipe', 'Cancel'], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
+        index => actions[index]?.(),
+      );
+    } else {
+      Alert.alert(recipe.name, undefined, [
+        { text: 'Edit Recipe', onPress: actions[0] },
+        { text: 'Delete Recipe', style: 'destructive', onPress: deleteRecipe },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
   };
 
   const handleUploadPhoto = async () => {
@@ -190,7 +240,17 @@ export default function ProfileScreen() {
   }
 
   const totalSaves = userRecipes.reduce((sum, recipe) => sum + (recipe.saves || 0), 0);
-  const averageRating = userRecipes.length > 0 ? 4.9 : 0;
+  const ratingTotals = userRecipes.reduce((totals, recipe) => {
+    const summary = recipeRatings[recipe.id];
+    if (!summary) return totals;
+    return {
+      totalPoints: totals.totalPoints + summary.averageRating * summary.totalReviews,
+      totalReviews: totals.totalReviews + summary.totalReviews,
+    };
+  }, { totalPoints: 0, totalReviews: 0 });
+  const averageRating = ratingTotals.totalReviews > 0
+    ? ratingTotals.totalPoints / ratingTotals.totalReviews
+    : 0;
 
   return (
     <ScrollView
@@ -291,7 +351,11 @@ export default function ProfileScreen() {
 
             <View style={styles.recipeRating}>
               <Ionicons name="star" size={12} color="#FFD700" />
-              <Text style={styles.recipeRatingText}>4.9</Text>
+              <Text style={styles.recipeRatingText}>
+                {recipeRatings[recipe.id]?.totalReviews
+                  ? recipeRatings[recipe.id].averageRating.toFixed(1)
+                  : 'New'}
+              </Text>
             </View>
 
             <View style={styles.recipeContent}>
@@ -311,7 +375,14 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.moreButton}>
+            <TouchableOpacity
+              style={styles.moreButton}
+              onPress={(event) => {
+                event.stopPropagation();
+                handleRecipeMenu(recipe);
+              }}
+              accessibilityLabel={`Manage ${recipe.name}`}
+            >
               <Ionicons name="ellipsis-horizontal" size={20} color="#999" />
             </TouchableOpacity>
           </TouchableOpacity>

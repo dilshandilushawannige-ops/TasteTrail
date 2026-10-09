@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   Image,
   KeyboardAvoidingView,
@@ -40,6 +41,17 @@ function formatPrice(value: number) {
   return `Rs. ${Math.round(value).toLocaleString('en-US')}`;
 }
 
+function categoryIcon(label: string): keyof typeof Ionicons.glyphMap {
+  const normalized = label.toLowerCase();
+  if (normalized === 'all') return 'grid-outline';
+  if (normalized.includes('seafood') || normalized.includes('fish')) return 'fish-outline';
+  if (normalized.includes('curry') || normalized.includes('spicy')) return 'flame-outline';
+  if (normalized.includes('rice')) return 'restaurant-outline';
+  if (normalized.includes('sweet') || normalized.includes('dessert')) return 'ice-cream-outline';
+  if (normalized.includes('drink') || normalized.includes('beverage')) return 'cafe-outline';
+  return 'leaf-outline';
+}
+
 function timestampValue(value: MenuItem['createdAt']) {
   if (!value) return 0;
   if (typeof value.toMillis === 'function') return value.toMillis();
@@ -65,6 +77,7 @@ export default function CustomerRestaurantMenu() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryTransition] = useState(() => new Animated.Value(1));
   const [loadingRestaurant, setLoadingRestaurant] = useState(Boolean(id) && !restaurant);
   const [loadingMenu, setLoadingMenu] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(id ? null : 'Restaurant not found');
@@ -162,6 +175,28 @@ export default function CustomerRestaurantMenu() {
     setSelectedCategory(null);
   };
 
+  const selectCategory = (categoryId: string | null) => {
+    const nextCategory = selectedCategory === categoryId ? null : categoryId;
+    if (nextCategory === selectedCategory) return;
+
+    Animated.timing(categoryTransition, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setSelectedCategory(nextCategory);
+      Animated.spring(categoryTransition, {
+        toValue: 1,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
   if (loadingRestaurant || (loadingMenu && !restaurant)) {
     return <LoadingState insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
@@ -178,60 +213,62 @@ export default function CustomerRestaurantMenu() {
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
       >
-        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.canGoBack() ? router.back() : router.replace({ pathname: '/restaurant/[id]', params: { id } })}
-            accessibilityRole="button"
-            accessibilityLabel="Back to restaurant details"
-          >
-            <Feather name="arrow-left" size={22} color={NAVY} />
-          </TouchableOpacity>
-          <View style={styles.headerButton}><Ionicons name="person-circle" size={25} color={RED} /><View style={styles.onlineDot} /></View>
-        </View>
-
-        <Text style={styles.overline}>{restaurant?.category || restaurant?.tags?.[0] || 'Restaurant'}</Text>
-        <Text style={styles.restaurantName} numberOfLines={2}>{restaurant?.name || 'Restaurant Menu'}</Text>
-        <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={15} color={MUTED} />
-          <Text style={styles.addressText} numberOfLines={1} ellipsizeMode="tail">{[restaurant?.address, restaurant?.city].filter(Boolean).join(', ') || 'Location unavailable'}</Text>
-        </View>
-        <View style={styles.statusRow}>
-          <View style={[styles.statusPill, status.label === 'Open' ? styles.openPill : styles.closedPill]}>
-            <View style={[styles.statusDot, { backgroundColor: status.color }]} />
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+        <View style={styles.topContent}>
+          <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.canGoBack() ? router.back() : router.replace({ pathname: '/restaurant/[id]', params: { id } })}
+              accessibilityRole="button"
+              accessibilityLabel="Back to restaurant details"
+            >
+              <Feather name="arrow-left" size={22} color={NAVY} />
+            </TouchableOpacity>
+            <View style={styles.headerButton}><Ionicons name="person-circle" size={25} color={RED} /><View style={styles.onlineDot} /></View>
           </View>
-          {restaurant?.reviewCount ? (
-            <View style={styles.reviewSummary}><Ionicons name="star" size={14} color="#F5B83D" /><Text style={styles.metaText}>{`${restaurant.rating.toFixed(1)} (${restaurant.reviewCount})`}</Text></View>
-          ) : <Text style={styles.metaText}>No reviews yet</Text>}
-        </View>
 
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={19} color="#7B8798" />
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search dishes, spices, ingredients..."
-            placeholderTextColor="#8D99A9"
-            numberOfLines={1}
-            returnKeyType="search"
-          />
-          {!!search && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={18} color="#9AA4B2" /></TouchableOpacity>}
-        </View>
+          <Text style={styles.overline}>{restaurant?.category || restaurant?.tags?.[0] || 'Restaurant'}</Text>
+          <Text style={styles.restaurantName} numberOfLines={2}>{restaurant?.name || 'Restaurant Menu'}</Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={15} color={MUTED} />
+            <Text style={styles.addressText} numberOfLines={1} ellipsizeMode="tail">{[restaurant?.address, restaurant?.city].filter(Boolean).join(', ') || 'Location unavailable'}</Text>
+          </View>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusPill, status.label === 'Open' ? styles.openPill : styles.closedPill]}>
+              <View style={[styles.statusDot, { backgroundColor: status.color }]} />
+              <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+            </View>
+            {restaurant?.reviewCount ? (
+              <View style={styles.reviewSummary}><Ionicons name="star" size={14} color="#F5B83D" /><Text style={styles.metaText}>{`${restaurant.rating.toFixed(1)} (${restaurant.reviewCount})`}</Text></View>
+            ) : <Text style={styles.metaText}>No reviews yet</Text>}
+          </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-          <CategoryChip label="All" count={availableItems.length} selected={!selectedCategory} onPress={() => setSelectedCategory(null)} />
-          {availableCategories.map((category) => (
-            <CategoryChip
-              key={category.id}
-              label={category.name}
-              count={categoryCounts.get(category.id) || 0}
-              selected={selectedCategory === category.id}
-              onPress={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={19} color="#7B8798" />
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search dishes, spices, ingredients..."
+              placeholderTextColor="#8D99A9"
+              numberOfLines={1}
+              returnKeyType="search"
             />
-          ))}
-        </ScrollView>
+            {!!search && <TouchableOpacity onPress={() => setSearch('')}><Ionicons name="close-circle" size={18} color="#9AA4B2" /></TouchableOpacity>}
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+            <CategoryChip label="All" count={availableItems.length} selected={!selectedCategory} onPress={() => selectCategory(null)} />
+            {availableCategories.map((category) => (
+              <CategoryChip
+                key={category.id}
+                label={category.name}
+                count={categoryCounts.get(category.id) || 0}
+                selected={selectedCategory === category.id}
+                onPress={() => selectCategory(category.id)}
+              />
+            ))}
+          </ScrollView>
+        </View>
 
         {error ? (
           <StateBlock icon="alert-circle-outline" title={error} action="Retry" onAction={() => setError(null)} />
@@ -242,33 +279,45 @@ export default function CustomerRestaurantMenu() {
         ) : sections.length === 0 ? (
           <StateBlock icon="search-outline" title="No dishes found" action="Clear filters" onAction={clearFilters} />
         ) : (
-          sections.map((section) => (
-            <View key={section.categoryId} style={styles.section}>
-              {section.category?.subtitle ? <Text style={styles.categorySubtitle}>{section.category.subtitle}</Text> : null}
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{section.category?.name || section.categoryId || 'Menu'}</Text>
-                <Text style={styles.recipeCount}>{section.items.length} {section.items.length === 1 ? 'ITEM' : 'ITEMS'}</Text>
+          <Animated.View
+            style={{
+              opacity: categoryTransition,
+              transform: [{
+                translateY: categoryTransition.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [8, 0],
+                }),
+              }],
+            }}
+          >
+            {sections.map((section) => (
+              <View key={section.categoryId} style={styles.section}>
+                {section.category?.subtitle ? <Text style={styles.categorySubtitle}>{section.category.subtitle}</Text> : null}
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{section.category?.name || section.categoryId || 'Menu'}</Text>
+                  <Text style={styles.recipeCount}>{section.items.length} {section.items.length === 1 ? 'ITEM' : 'ITEMS'}</Text>
+                </View>
+                <View style={styles.carouselWrap}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.cardCarousel}
+                    decelerationRate="fast"
+                    snapToInterval={CARD_WIDTH + 14}
+                    nestedScrollEnabled
+                    directionalLockEnabled
+                  >
+                    {section.items.map((item) => <MenuCard key={item.id} item={item} />)}
+                  </ScrollView>
+                  {section.items.length > 1 ? (
+                    <View style={styles.scrollHint} pointerEvents="none">
+                      <Ionicons name="chevron-forward" size={17} color="#FFF" />
+                    </View>
+                  ) : null}
+                </View>
               </View>
-              <View style={styles.carouselWrap}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cardCarousel}
-                  decelerationRate="fast"
-                  snapToInterval={CARD_WIDTH + 14}
-                  nestedScrollEnabled
-                  directionalLockEnabled
-                >
-                  {section.items.map((item) => <MenuCard key={item.id} item={item} />)}
-                </ScrollView>
-                {section.items.length > 1 ? (
-                  <View style={styles.scrollHint} pointerEvents="none">
-                    <Ionicons name="chevron-forward" size={17} color="#FFF" />
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ))
+            ))}
+          </Animated.View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -276,7 +325,11 @@ export default function CustomerRestaurantMenu() {
 }
 
 function CategoryChip({ label, count, selected, onPress }: { label: string; count?: number; selected: boolean; onPress: () => void }) {
-  return <TouchableOpacity style={[styles.categoryChip, selected ? styles.categoryChipSelected : styles.categoryChipUnselected]} onPress={onPress} activeOpacity={0.9}><Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]} numberOfLines={1}>{label}</Text>{count !== undefined && <View style={[styles.countBadge, selected && styles.countBadgeSelected]}><Text style={[styles.countBadgeText, selected && styles.countBadgeTextSelected]}>{count}</Text></View>}</TouchableOpacity>;
+  return <TouchableOpacity style={[styles.categoryChip, selected ? styles.categoryChipSelected : styles.categoryChipUnselected]} onPress={onPress} activeOpacity={0.9}>
+    <Ionicons name={categoryIcon(label)} size={16} color={selected ? '#FFF' : NAVY} />
+    <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]} numberOfLines={1}>{label}</Text>
+    {count !== undefined && <View style={[styles.countBadge, selected && styles.countBadgeSelected]}><Text style={[styles.countBadgeText, selected && styles.countBadgeTextSelected]}>{count}</Text></View>}
+  </TouchableOpacity>;
 }
 
 function MenuCard({ item }: { item: MenuItem }) {
@@ -331,6 +384,7 @@ function LoadingCards() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FAFAF7' },
+  topContent: { backgroundColor: '#FFF', marginHorizontal: -20, paddingHorizontal: 20, paddingBottom: 14 },
   content: { paddingHorizontal: 20, paddingTop: 8 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   headerButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#EEF0F4', shadowColor: '#1F2937', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 2 },
@@ -347,13 +401,13 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 12, fontWeight: '600' },
   reviewSummary: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  searchBox: { height: 44, borderRadius: 22, backgroundColor: '#EEF3F8', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9 },
+  searchBox: { height: 44, borderRadius: 22, backgroundColor: '#F5F5F5', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9 },
   searchInput: { flex: 1, minWidth: 0, color: NAVY, fontSize: 14 },
-  chipsRow: { gap: 8, paddingTop: 12, paddingBottom: 4 },
-  categoryChip: { height: 34, paddingHorizontal: 14, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  chipsRow: { gap: 10, paddingTop: 12, paddingBottom: 4 },
+  categoryChip: { height: 40, paddingHorizontal: 16, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   categoryChipSelected: { backgroundColor: RED },
-  categoryChipUnselected: { backgroundColor: '#EAF0F6' },
-  categoryChipText: { color: NAVY, fontSize: 13, fontWeight: '600' },
+  categoryChipUnselected: { backgroundColor: '#F5F5F5' },
+  categoryChipText: { color: NAVY, fontSize: 12, fontWeight: 'normal' },
   categoryChipTextSelected: { color: '#FFF' },
   countBadge: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
   countBadgeSelected: { backgroundColor: 'rgba(255,255,255,0.25)' },

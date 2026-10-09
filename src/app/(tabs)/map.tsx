@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +43,7 @@ export default function DiscoverScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [lastTapTime, setLastTapTime] = useState<number>(0);
   const [toast, setToast] = useState('');
+  const [categoryTransition] = useState(() => new Animated.Value(1));
   const { isSaved, toggle } = useSavedRestaurants();
 
   const {
@@ -78,8 +80,25 @@ export default function DiscoverScreen() {
 
   // Handle category selection
   const handleCategorySelect = (categoryId: string) => {
-    setSelectedCategory(categoryId);
-    setGlobalSelectedCategory(categoryId === 'all' ? null : categoryId);
+    if (categoryId === selectedCategory) return;
+
+    Animated.timing(categoryTransition, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setSelectedCategory(categoryId);
+      setGlobalSelectedCategory(categoryId === 'all' ? null : categoryId);
+      Animated.spring(categoryTransition, {
+        toValue: 1,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }).start();
+    });
   };
 
   // Handle bookmark toggle
@@ -130,7 +149,7 @@ export default function DiscoverScreen() {
 
   // Render category chips from real restaurant categories
   const renderCategoryChips = () => (
-    <ScrollView 
+    <ScrollView
       horizontal 
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.categoryContainer}
@@ -338,34 +357,53 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {renderSearchRow()}
-        {renderCategoryChips()}
+        <View style={styles.topContent}>
+          <View style={styles.introSection}>
+            <Text style={styles.introTitle}>Discover local flavors</Text>
+            <Text style={styles.introDescription}>
+              Find nearby restaurants, hidden gems, and dishes worth tasting.
+            </Text>
+          </View>
+          {renderSearchRow()}
+          {renderCategoryChips()}
+        </View>
         {renderMapCard()}
         {renderSectionHeader()}
         
         {/* Restaurant list */}
-        <ScrollView 
-          style={styles.restaurantList}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <Animated.View
+          style={{
+            opacity: categoryTransition,
+            transform: [{
+              translateY: categoryTransition.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            }],
+          }}
         >
-          {nearbyRestaurants.slice(0, 5).map((restaurant) => (
-            <View key={restaurant.id} style={styles.restaurantCardWrapper}>
-              {renderRestaurantCard({ item: restaurant })}
-            </View>
-          ))}
-          
-          {/* Show "no results" message if filtered list is empty */}
-          {nearbyRestaurants.length === 0 && (
-            <View style={styles.noResultsContainer}>
-              <Ionicons name="restaurant-outline" size={48} color="#9CA3AF" />
-              <Text style={styles.noResultsTitle}>No restaurants found</Text>
-              <Text style={styles.noResultsSubtitle}>
-                Try adjusting your search or category filter
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+          <ScrollView
+            style={styles.restaurantList}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {nearbyRestaurants.slice(0, 5).map((restaurant) => (
+              <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+                {renderRestaurantCard({ item: restaurant })}
+              </View>
+            ))}
+
+            {nearbyRestaurants.length === 0 && (
+              <View style={styles.noResultsContainer}>
+                <Ionicons name="restaurant-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.noResultsTitle}>No restaurants found</Text>
+                <Text style={styles.noResultsSubtitle}>
+                  Try adjusting your search or category filter
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </Animated.View>
 
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
@@ -385,8 +423,28 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  topContent: {
+    backgroundColor: '#FFF',
+    paddingBottom: 14,
+  },
 
   // Search row with native header
+  introSection: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 2,
+  },
+  introTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 5,
+  },
+  introDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#64748B',
+  },
   searchRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -395,12 +453,12 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flex: 1,
-    height: 38,      // Reduced from 44dp
-    backgroundColor: '#EEF2F7',
-    borderRadius: 19,
+    height: 42,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 28,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   searchIcon: {
     marginRight: 10,
@@ -436,10 +494,9 @@ const styles = StyleSheet.create({
     maxWidth: 120,
   },
   filterButton: {
-    width: 38,       // Match search height
-    height: 38,
     backgroundColor: '#E8505B',
-    borderRadius: 14,
+    padding: 8,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -456,18 +513,13 @@ const styles = StyleSheet.create({
     height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF2F7',
+    backgroundColor: '#F5F5F5',
     paddingHorizontal: 16,
     borderRadius: 20,
     gap: 8,
   },
   categoryChipSelected: {
     backgroundColor: '#E8505B',
-    shadowColor: '#E8505B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
   lastCategoryChip: {
     marginRight: -100, // Extends beyond screen edge as in reference
