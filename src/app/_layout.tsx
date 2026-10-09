@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import AccountBlockGate from '@/components/AccountBlockGate';
 import { auth } from '@/firebaseConfig';
 
 SplashScreen.preventAutoHideAsync();
@@ -155,7 +156,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      <Slot />
+      <AccountBlockGate><Slot /></AccountBlockGate>
     </ThemeProvider>
   );
 }
