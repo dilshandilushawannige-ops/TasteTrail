@@ -100,7 +100,7 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
     finally { submittingRef.current = false; setSubmitting(false); }
   };
   const choices = (label: string, options: string[], value: string, select: (value: string) => void) => (
-    <View style={styles.choiceGroup}><Text style={styles.label}>{label}</Text><View style={styles.choices}>
+    <View style={styles.choiceGroup}><Text style={[styles.label, styles.choiceLabel]}>{label}</Text><View style={styles.choices}>
       {options.map(option => <TouchableOpacity key={option} disabled={submitting} onPress={() => select(option)} accessibilityRole="radio" accessibilityState={{ checked: value === option }} style={[styles.chip, value === option && styles.selectedChip]}><Text style={[styles.chipText, value === option && styles.selectedChipText]}>{option}</Text></TouchableOpacity>)}
     </View></View>
   );
@@ -115,10 +115,10 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
         <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {feedback && <View style={styles.feedback} accessibilityRole="alert" accessibilityLiveRegion="polite">
             <Text style={styles.feedbackText}>{feedback}</Text>
-            <TouchableOpacity accessibilityLabel="Dismiss message" onPress={() => setFeedback(null)} style={styles.dismissFeedback}><Ionicons name="close" size={18} color="#B5213B" /></TouchableOpacity>
+            <TouchableOpacity accessibilityLabel="Dismiss message" onPress={() => setFeedback(null)} style={styles.dismissFeedback}><Ionicons name="close" size={18} color="#E8505B" /></TouchableOpacity>
           </View>}
           <View style={[styles.card, styles.restaurantCard]}>
-            {restaurantPhoto ? <Image source={{ uri: restaurantPhoto }} style={styles.restaurantPhoto} /> : <View style={[styles.restaurantPhoto, styles.photoPlaceholder]}><Ionicons name="restaurant" size={25} color="#B5213B" /></View>}
+            {restaurantPhoto ? <Image source={{ uri: restaurantPhoto }} style={styles.restaurantPhoto} /> : <View style={[styles.restaurantPhoto, styles.photoPlaceholder]}><Ionicons name="restaurant" size={25} color="#E8505B" /></View>}
             <View style={styles.restaurantInfo}><Text style={styles.restaurantName}>{restaurantName}</Text>{!!restaurantDescription && <Text numberOfLines={2} style={styles.description}>{restaurantDescription}</Text>}<Text style={styles.supportText}>SHARING EXPERIENCE SUPPORTS LOCAL DINING</Text></View>
           </View>
           <View style={[styles.card, styles.ratingCard]}>
@@ -142,10 +142,10 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, res
             <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Add Photos &amp; Videos</Text><Text style={styles.count}>{media.length} of {MAX_MEDIA} added</Text></View>
             <View style={styles.mediaGrid}>
               {media.map((asset, index) => <View key={asset.uri} style={styles.mediaTile}>
-                {asset.type === 'video' ? <View style={styles.videoTile}><Ionicons name="videocam" size={28} color="#B5213B" /><Text numberOfLines={1} style={styles.mediaLabel}>{asset.fileName || 'Video'}</Text></View> : <Image source={{ uri: asset.uri }} style={styles.mediaImage} />}
+                {asset.type === 'video' ? <View style={styles.videoTile}><Ionicons name="videocam" size={28} color="#E8505B" /><Text numberOfLines={1} style={styles.mediaLabel}>{asset.fileName || 'Video'}</Text></View> : <Image source={{ uri: asset.uri }} style={styles.mediaImage} />}
                 <TouchableOpacity accessibilityLabel={`Remove attachment ${index + 1}`} disabled={submitting} onPress={() => setMedia(current => current.filter((_, i) => i !== index))} style={styles.removeMedia}><Ionicons name="close" size={15} color="#FFF" /></TouchableOpacity>
               </View>)}
-              {media.length < MAX_MEDIA && <TouchableOpacity style={[styles.mediaTile, styles.addMedia]} onPress={addMedia} disabled={picking || submitting} accessibilityLabel="Add photos or videos"><View style={styles.cameraCircle}><Ionicons name="camera-outline" size={22} color="#C72D49" /></View><Text style={styles.mediaLabel}>{picking ? 'OPENING...' : 'ADD MEDIA'}</Text></TouchableOpacity>}
+              {media.length < MAX_MEDIA && <TouchableOpacity style={[styles.mediaTile, styles.addMedia]} onPress={addMedia} disabled={picking || submitting} accessibilityLabel="Add photos or videos"><View style={styles.cameraCircle}><Ionicons name="camera-outline" size={22} color="#E8505B" /></View><Text style={styles.mediaLabel}>{picking ? 'OPENING...' : 'ADD MEDIA'}</Text></TouchableOpacity>}
             </View>
             <View style={styles.mediaHintRow}><Ionicons name="checkmark-circle-outline" size={14} color="#279A8C" /><Text style={styles.mediaHint}>Photos of food, menus, and ambiance help fellow diners!</Text></View>
           </View>
@@ -168,9 +168,9 @@ const styles = StyleSheet.create({
   heading: { flex: 1, alignItems: 'center' },
   title: { fontSize: 19, fontWeight: '700', color: '#252B3F' },
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' },
-  subtitleDot: { width: 7, height: 7, borderRadius: 2, backgroundColor: '#E2788C' },
+  subtitleDot: { width: 7, height: 7, borderRadius: 2, backgroundColor: '#E8505B' },
   subtitle: { fontSize: 9, color: '#7C7E8C', flexShrink: 1 },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#B5213B', alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#E8505B', alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
   feedback: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#FFE9EF', borderRadius: 10 },
   feedbackText: { flex: 1, fontSize: 12, lineHeight: 18, color: '#8C1930' },
@@ -186,14 +186,15 @@ const styles = StyleSheet.create({
   supportText: { fontSize: 9, lineHeight: 12, color: '#7E7479' },
   ratingCard: { alignItems: 'center', gap: 8, paddingVertical: 18 },
   label: { fontSize: 10, fontWeight: '600', color: '#927C7C' },
+  choiceLabel: { fontWeight: '700' },
   stars: { flexDirection: 'row', justifyContent: 'center', gap: 4 },
   starButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   ratingText: { fontSize: 19, fontWeight: '700', color: '#252B3F' },
-  ratingHint: { fontSize: 11, color: '#BF2945', textAlign: 'center' },
+  ratingHint: { fontSize: 11, color: '#E8505B', textAlign: 'center' },
   choiceGroup: { gap: 7 },
-  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { backgroundColor: '#F1F2FE', borderRadius: 24, minHeight: 40, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
-  selectedChip: { backgroundColor: '#B5213B' },
+  choices: { flexDirection: 'row', gap: 8 },
+  chip: { flex: 1, backgroundColor: '#F1F2FE', borderRadius: 20, minHeight: 40, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
+  selectedChip: { backgroundColor: '#E8505B' },
   chipText: { fontSize: 11, color: '#646879' },
   selectedChipText: { color: '#FFF', fontWeight: '700' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
   videoTile: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 8, gap: 8 },
   removeMedia: { position: 'absolute', top: 3, right: 3, width: 28, height: 28, borderRadius: 14, backgroundColor: '#252B3FCC', alignItems: 'center', justifyContent: 'center' },
   addMedia: { alignItems: 'center', justifyContent: 'center', gap: 8 },
-  cameraCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFDDE5', alignItems: 'center', justifyContent: 'center' },
+  cameraCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FCECEF', alignItems: 'center', justifyContent: 'center' },
   mediaLabel: { fontSize: 9, fontWeight: '700', color: '#41475B' },
   mediaHintRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   mediaHint: { flex: 1, fontSize: 10, color: '#8C7B82', lineHeight: 14 },
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
   checkbox: { width: 23, height: 23, borderRadius: 5, backgroundColor: '#EAEBFF', alignItems: 'center', justifyContent: 'center' },
   anonymousTitle: { fontSize: 13, fontWeight: '700', color: '#252B3F' },
   footer: { paddingHorizontal: 12, paddingTop: 8, backgroundColor: '#F8F8FE', width: '100%', maxWidth: 600, alignSelf: 'center' },
-  submitButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#B5213B', borderRadius: 7, paddingVertical: 15 },
+  submitButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#E8505B', borderRadius: 26, paddingVertical: 15 },
   submitText: { fontSize: 17, fontWeight: '700', color: '#FFF' },
   disabled: { opacity: 0.5 },
   saveDraft: { alignItems: 'center', paddingTop: 12, paddingBottom: 4 },
