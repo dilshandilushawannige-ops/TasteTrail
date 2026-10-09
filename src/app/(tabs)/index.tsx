@@ -55,6 +55,15 @@ const categories = [
   { id: 'sweets', name: 'Village Sweets' },
 ];
 
+const categoryIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+  all: 'grid-outline',
+  curries: 'flame-outline',
+  hoppers: 'ellipse-outline',
+  coastal: 'fish-outline',
+  heritage: 'leaf-outline',
+  sweets: 'ice-cream-outline',
+};
+
 export default function HomeScreen() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -282,7 +291,12 @@ export default function HomeScreen() {
           <Text style={styles.dishCount}>{filteredRecipes.length} dishes</Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesScroll}
+          contentContainerStyle={styles.categoryPillsContent}
+        >
           {categories.map((category) => (
             <TouchableOpacity
               key={category.id}
@@ -292,6 +306,11 @@ export default function HomeScreen() {
               ]}
               onPress={() => setSelectedCategory(category.id)}
             >
+              <Ionicons
+                name={categoryIcons[category.id]}
+                size={16}
+                color={selectedCategory === category.id ? '#FFF' : '#1E293B'}
+              />
               <Text
                 style={[
                   styles.categoryPillText,
@@ -460,9 +479,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
-    borderRadius: 12,
+    borderRadius: 28,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
+    minHeight: 42,
   },
   searchIcon: {
     marginRight: 8,
@@ -475,7 +495,7 @@ const styles = StyleSheet.create({
   filterButton: {
     backgroundColor: '#E8505B',
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 20,
     marginLeft: 8,
   },
 
@@ -656,20 +676,26 @@ const styles = StyleSheet.create({
   categoriesScroll: {
     marginBottom: 16,
   },
+  categoryPillsContent: {
+    gap: 10,
+  },
   categoryPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: '#F5F5F5',
-    marginRight: 8,
+    gap: 8,
   },
   categoryPillActive: {
     backgroundColor: '#E8505B',
   },
   categoryPillText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: 12,
+    fontWeight: 'normal',
+    color: '#1E293B',
   },
   categoryPillTextActive: {
     color: '#FFF',
