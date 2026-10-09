@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +43,7 @@ export default function DiscoverScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [lastTapTime, setLastTapTime] = useState<number>(0);
   const [toast, setToast] = useState('');
+  const [categoryTransition] = useState(() => new Animated.Value(1));
   const { isSaved, toggle } = useSavedRestaurants();
 
   const {
@@ -78,8 +80,25 @@ export default function DiscoverScreen() {
 
   // Handle category selection
   const handleCategorySelect = (categoryId: string) => {
-    setSelectedCategory(categoryId);
-    setGlobalSelectedCategory(categoryId === 'all' ? null : categoryId);
+    if (categoryId === selectedCategory) return;
+
+    Animated.timing(categoryTransition, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setSelectedCategory(categoryId);
+      setGlobalSelectedCategory(categoryId === 'all' ? null : categoryId);
+      Animated.spring(categoryTransition, {
+        toValue: 1,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }).start();
+    });
   };
 
   // Handle bookmark toggle
@@ -130,7 +149,7 @@ export default function DiscoverScreen() {
 
   // Render category chips from real restaurant categories
   const renderCategoryChips = () => (
-    <ScrollView 
+    <ScrollView
       horizontal 
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.categoryContainer}
@@ -352,28 +371,39 @@ export default function DiscoverScreen() {
         {renderSectionHeader()}
         
         {/* Restaurant list */}
-        <ScrollView 
-          style={styles.restaurantList}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <Animated.View
+          style={{
+            opacity: categoryTransition,
+            transform: [{
+              translateY: categoryTransition.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            }],
+          }}
         >
-          {nearbyRestaurants.slice(0, 5).map((restaurant) => (
-            <View key={restaurant.id} style={styles.restaurantCardWrapper}>
-              {renderRestaurantCard({ item: restaurant })}
-            </View>
-          ))}
-          
-          {/* Show "no results" message if filtered list is empty */}
-          {nearbyRestaurants.length === 0 && (
-            <View style={styles.noResultsContainer}>
-              <Ionicons name="restaurant-outline" size={48} color="#9CA3AF" />
-              <Text style={styles.noResultsTitle}>No restaurants found</Text>
-              <Text style={styles.noResultsSubtitle}>
-                Try adjusting your search or category filter
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+          <ScrollView
+            style={styles.restaurantList}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {nearbyRestaurants.slice(0, 5).map((restaurant) => (
+              <View key={restaurant.id} style={styles.restaurantCardWrapper}>
+                {renderRestaurantCard({ item: restaurant })}
+              </View>
+            ))}
+
+            {nearbyRestaurants.length === 0 && (
+              <View style={styles.noResultsContainer}>
+                <Ionicons name="restaurant-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.noResultsTitle}>No restaurants found</Text>
+                <Text style={styles.noResultsSubtitle}>
+                  Try adjusting your search or category filter
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </Animated.View>
 
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />

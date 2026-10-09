@@ -5,6 +5,7 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   RefreshControl,
   ScrollView,
@@ -74,6 +75,7 @@ export default function HomeScreen() {
   const [saveToast, setSaveToast] = useState('');
   const [recipeRatings, setRecipeRatings] = useState<Record<string, RatingSummary>>({});
   const [rankingTime] = useState(() => Date.now());
+  const [categoryTransition] = useState(() => new Animated.Value(1));
   const { isSaved, toggle } = useSavedRecipes();
 
   const toggleRecipe = async (recipeId: string) => {
@@ -135,6 +137,27 @@ export default function HomeScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchRecipes();
+  };
+
+  const selectCategory = (categoryId: string) => {
+    if (categoryId === selectedCategory) return;
+
+    Animated.timing(categoryTransition, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setSelectedCategory(categoryId);
+      Animated.spring(categoryTransition, {
+        toValue: 1,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }).start();
+    });
   };
 
   const filteredRecipes = recipes.filter((recipe) => {
@@ -304,7 +327,7 @@ export default function HomeScreen() {
                 styles.categoryPill,
                 selectedCategory === category.id && styles.categoryPillActive,
               ]}
-              onPress={() => setSelectedCategory(category.id)}
+              onPress={() => selectCategory(category.id)}
             >
               <Ionicons
                 name={categoryIcons[category.id]}
@@ -323,38 +346,50 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryCards}>
-          {recentRecipes.slice(0, 3).map((recipe) => (
-            <TouchableOpacity
-              key={recipe.id}
-              style={styles.categoryCard}
-              onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
-            >
-              {recipe.imageUrl ? (
-                <Image source={{ uri: recipe.imageUrl }} style={styles.categoryCardImage} />
-              ) : (
-                <View style={[styles.categoryCardImage, styles.placeholderCategoryImage]}>
-                  <Ionicons name="restaurant" size={32} color="#E8505B" />
+        <Animated.View
+          style={{
+            opacity: categoryTransition,
+            transform: [{
+              translateY: categoryTransition.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            }],
+          }}
+        >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryCards}>
+            {recentRecipes.slice(0, 3).map((recipe) => (
+              <TouchableOpacity
+                key={recipe.id}
+                style={styles.categoryCard}
+                onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+              >
+                {recipe.imageUrl ? (
+                  <Image source={{ uri: recipe.imageUrl }} style={styles.categoryCardImage} />
+                ) : (
+                  <View style={[styles.categoryCardImage, styles.placeholderCategoryImage]}>
+                    <Ionicons name="restaurant" size={32} color="#E8505B" />
+                  </View>
+                )}
+                <Text style={styles.categoryCardTitle} numberOfLines={2}>
+                  {recipe.name}
+                </Text>
+                <View style={styles.categoryCardFooter}>
+                  <Text style={styles.categoryCardTime}>TIME</Text>
+                  <TouchableOpacity
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      void toggleRecipe(recipe.id);
+                    }}
+                  >
+                    <Ionicons name={isSaved(recipe.id) ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved(recipe.id) ? '#E8505B' : '#999'} />
+                  </TouchableOpacity>
                 </View>
-              )}
-              <Text style={styles.categoryCardTitle} numberOfLines={2}>
-                {recipe.name}
-              </Text>
-              <View style={styles.categoryCardFooter}>
-                <Text style={styles.categoryCardTime}>TIME</Text>
-                <TouchableOpacity
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    void toggleRecipe(recipe.id);
-                  }}
-                >
-                  <Ionicons name={isSaved(recipe.id) ? 'bookmark' : 'bookmark-outline'} size={16} color={isSaved(recipe.id) ? '#E8505B' : '#999'} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.categoryCardDuration}>25 Mins</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <Text style={styles.categoryCardDuration}>25 Mins</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Animated.View>
       </View>
 
       {/* Recent Recipe */}

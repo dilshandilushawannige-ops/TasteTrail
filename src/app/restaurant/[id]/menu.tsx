@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   Image,
   KeyboardAvoidingView,
@@ -76,6 +77,7 @@ export default function CustomerRestaurantMenu() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryTransition] = useState(() => new Animated.Value(1));
   const [loadingRestaurant, setLoadingRestaurant] = useState(Boolean(id) && !restaurant);
   const [loadingMenu, setLoadingMenu] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(id ? null : 'Restaurant not found');
@@ -173,6 +175,28 @@ export default function CustomerRestaurantMenu() {
     setSelectedCategory(null);
   };
 
+  const selectCategory = (categoryId: string | null) => {
+    const nextCategory = selectedCategory === categoryId ? null : categoryId;
+    if (nextCategory === selectedCategory) return;
+
+    Animated.timing(categoryTransition, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+
+      setSelectedCategory(nextCategory);
+      Animated.spring(categoryTransition, {
+        toValue: 1,
+        damping: 18,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
   if (loadingRestaurant || (loadingMenu && !restaurant)) {
     return <LoadingState insetsTop={insets.top} insetsBottom={insets.bottom} />;
   }
@@ -233,14 +257,14 @@ export default function CustomerRestaurantMenu() {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-            <CategoryChip label="All" count={availableItems.length} selected={!selectedCategory} onPress={() => setSelectedCategory(null)} />
+            <CategoryChip label="All" count={availableItems.length} selected={!selectedCategory} onPress={() => selectCategory(null)} />
             {availableCategories.map((category) => (
               <CategoryChip
                 key={category.id}
                 label={category.name}
                 count={categoryCounts.get(category.id) || 0}
                 selected={selectedCategory === category.id}
-                onPress={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
+                onPress={() => selectCategory(category.id)}
               />
             ))}
           </ScrollView>
@@ -255,33 +279,45 @@ export default function CustomerRestaurantMenu() {
         ) : sections.length === 0 ? (
           <StateBlock icon="search-outline" title="No dishes found" action="Clear filters" onAction={clearFilters} />
         ) : (
-          sections.map((section) => (
-            <View key={section.categoryId} style={styles.section}>
-              {section.category?.subtitle ? <Text style={styles.categorySubtitle}>{section.category.subtitle}</Text> : null}
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{section.category?.name || section.categoryId || 'Menu'}</Text>
-                <Text style={styles.recipeCount}>{section.items.length} {section.items.length === 1 ? 'ITEM' : 'ITEMS'}</Text>
+          <Animated.View
+            style={{
+              opacity: categoryTransition,
+              transform: [{
+                translateY: categoryTransition.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [8, 0],
+                }),
+              }],
+            }}
+          >
+            {sections.map((section) => (
+              <View key={section.categoryId} style={styles.section}>
+                {section.category?.subtitle ? <Text style={styles.categorySubtitle}>{section.category.subtitle}</Text> : null}
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{section.category?.name || section.categoryId || 'Menu'}</Text>
+                  <Text style={styles.recipeCount}>{section.items.length} {section.items.length === 1 ? 'ITEM' : 'ITEMS'}</Text>
+                </View>
+                <View style={styles.carouselWrap}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.cardCarousel}
+                    decelerationRate="fast"
+                    snapToInterval={CARD_WIDTH + 14}
+                    nestedScrollEnabled
+                    directionalLockEnabled
+                  >
+                    {section.items.map((item) => <MenuCard key={item.id} item={item} />)}
+                  </ScrollView>
+                  {section.items.length > 1 ? (
+                    <View style={styles.scrollHint} pointerEvents="none">
+                      <Ionicons name="chevron-forward" size={17} color="#FFF" />
+                    </View>
+                  ) : null}
+                </View>
               </View>
-              <View style={styles.carouselWrap}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cardCarousel}
-                  decelerationRate="fast"
-                  snapToInterval={CARD_WIDTH + 14}
-                  nestedScrollEnabled
-                  directionalLockEnabled
-                >
-                  {section.items.map((item) => <MenuCard key={item.id} item={item} />)}
-                </ScrollView>
-                {section.items.length > 1 ? (
-                  <View style={styles.scrollHint} pointerEvents="none">
-                    <Ionicons name="chevron-forward" size={17} color="#FFF" />
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ))
+            ))}
+          </Animated.View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
