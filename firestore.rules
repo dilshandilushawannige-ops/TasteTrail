@@ -1,6 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Server time makes temporary blocks expire without a scheduled job.
+    function accountAccessAllowed() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return request.auth != null && (!exists(path)
+        || !(get(path).data.get('blockedAt', null) is timestamp)
+        || !(get(path).data.get('blockDurationDays', 0) in [7, 30])
+        || request.time >= get(path).data.blockedAt + duration.value(get(path).data.blockDurationDays, 'd'));
+    }
     
     // Helper function to check if user is admin
     function isAdmin() {
@@ -19,12 +27,12 @@ service cloud.firestore {
       // Allow read for:
       // - Active restaurants (everyone authenticated)
       // - All restaurants (admins only)
-      allow read: if request.auth != null && (
+      allow read: if request.auth != null && accountAccessAllowed() && (
         (resource.data.status == 'active') || isAdmin()
       );
       
       // Allow create: admins only
-      allow create: if isAdmin() && 
+      allow create: if accountAccessAllowed() && isAdmin() &&
         // Ensure required fields are present for create
         request.resource.data.keys().hasAll([
           'name', 'category', 'status', 'createdBy', 'createdAt'
@@ -33,13 +41,13 @@ service cloud.firestore {
         request.resource.data.createdBy == request.auth.uid;
       
       // Allow update: admins only
-      allow update: if isAdmin() && 
+      allow update: if accountAccessAllowed() && isAdmin() &&
         // Prevent changing createdBy and createdAt
         request.resource.data.createdBy == resource.data.createdBy &&
         request.resource.data.createdAt == resource.data.createdAt;
       
       // Allow delete: admins only
-      allow delete: if isAdmin();
+      allow delete: if accountAccessAllowed() && isAdmin();
     }
     
     // Account settings only allow a user to manage their own profile.
@@ -50,7 +58,7 @@ service cloud.firestore {
 
       // Only trusted authentication claims grant access to the full user list.
       function isUserAdmin() {
-        return request.auth != null && (
+        return request.auth != null && accountAccessAllowed() && (
           request.auth.token.get('admin', false) == true ||
           request.auth.token.get('admin', false) == 'true' ||
           request.auth.token.get('isAdmin', false) == true ||
@@ -61,13 +69,13 @@ service cloud.firestore {
       }
 
       allow read: if isOwner() || isUserAdmin();
-      allow delete: if isOwner();
+      allow delete: if isOwner() && accountAccessAllowed();
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'createdAt', 'bio', 'location'])
         && request.resource.data.uid == userId
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.name is string;
-      allow update: if isOwner()
+      allow update: if isOwner() && accountAccessAllowed()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'bio', 'location'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -75,9 +83,52 @@ service cloud.firestore {
         && (!('bio' in request.resource.data) || (request.resource.data.bio is string && request.resource.data.bio.size() <= 500))
         && (!('location' in request.resource.data) || (request.resource.data.location is string && request.resource.data.location.size() <= 150));
 
+      // An admin can set only block metadata; all profile fields stay unchanged.
+      allow update: if isUserAdmin() && request.auth.uid != userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['blockedAt', 'blockDurationDays', 'blockedBy'])
+        && ((request.resource.data.blockedAt == request.time
+          && request.resource.data.blockDurationDays in [7, 30])
+          || (request.resource.data.blockedAt == null
+            && request.resource.data.blockDurationDays == 0))
+        && request.resource.data.blockedBy == request.auth.uid;
+
       match /favourites/{favouriteId} {
-        allow read, delete: if isOwner();
+        allow read, delete: if isOwner() && accountAccessAllowed();
       }
+
+      // Read status is private to each user; opening the bell alone does not mark messages read.
+      match /announcementReads/{announcementId} {
+        allow read: if isOwner() && accountAccessAllowed();
+        allow create, update: if isOwner() && accountAccessAllowed()
+          && exists(/databases/$(database)/documents/announcements/$(announcementId))
+          && request.resource.data.keys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+      }
+    }
+
+    // Global announcements are managed by admins and visible to authenticated, unblocked users.
+    match /announcements/{announcementId} {
+      function announcementAdmin() {
+        return request.auth != null && accountAccessAllowed() && (
+          request.auth.token.get('admin', false) == true || request.auth.token.get('admin', false) == 'true'
+          || request.auth.token.get('isAdmin', false) == true || request.auth.token.get('role', '') == 'admin'
+          || (request.auth.token.get('roles', []) is list && request.auth.token.get('roles', []).hasAny(['admin'])));
+      }
+      allow read: if request.auth != null && accountAccessAllowed();
+      allow create: if announcementAdmin()
+        && request.resource.data.keys().hasOnly(['title', 'message', 'audience', 'createdBy', 'createdAt'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 1000
+        && request.resource.data.audience == 'all'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if announcementAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'message', 'updatedAt', 'updatedBy'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
+        && request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 1000
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if announcementAdmin();
     }
 
     // Recipes are public to signed-in members, including their review target.

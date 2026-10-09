@@ -1,9 +1,10 @@
 import { auth, db } from '@/firebaseConfig';
+import { blockExpiry, blockUser, unblockUser, type BlockDuration } from '@/services/userBlockService';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, Timestamp } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,12 +19,13 @@ interface SignupUser {
   role: string;
   status: string;
   isOnline: boolean | null;
+  blockedUntil: number | null;
 }
 
 const textField = (value: unknown): string => typeof value === 'string' ? value : '';
 const dateKey = (value: number) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
-const genderFilters = ['All Users', 'Male', 'Female', 'Others'] as const;
-type GenderFilter = typeof genderFilters[number];
+const userFilters = ['All Users', 'Blocked'] as const;
+type UserFilter = typeof userFilters[number];
 type InfoPanel = { title: string; message?: string; userId?: string } | null;
 
 export default function AdminUsersScreen() {
@@ -33,17 +35,24 @@ export default function AdminUsersScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
-  const [genderFilter, setGenderFilter] = useState<GenderFilter>('All Users');
+  const [userFilter, setUserFilter] = useState<UserFilter>('All Users');
   const [sort, setSort] = useState<'newest' | 'oldest' | 'name'>('newest');
   const [todayOnly, setTodayOnly] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [info, setInfo] = useState<InfoPanel>(null);
+  const [blockTarget, setBlockTarget] = useState<SignupUser | null>(null);
+  const [unblocking, setUnblocking] = useState(false);
+  const [blockDays, setBlockDays] = useState<BlockDuration>(7);
+  const [blocking, setBlocking] = useState(false);
+  const [blockError, setBlockError] = useState('');
+  const blockBusy = useRef(false);
+  const [now, setNow] = useState(Date.now);
   const [today, setToday] = useState(() => dateKey(Date.now()));
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    const timer = setInterval(() => setToday(dateKey(Date.now())), 60000);
+    const timer = setInterval(() => { setToday(dateKey(Date.now())); setNow(Date.now()); }, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -56,6 +65,7 @@ export default function AdminUsersScreen() {
       unsubscribeUsers = undefined;
       setUsers([]);
       setInfo(null);
+      setBlockTarget(null);
       setSelectedIds([]);
       setError('');
       setLoading(true);
@@ -92,6 +102,7 @@ export default function AdminUsersScreen() {
               role: textField(data.role) || 'Member',
               status: textField(data.status) || 'registered',
               isOnline: typeof data.isOnline === 'boolean' ? data.isOnline : null,
+              blockedUntil: blockExpiry(data),
             };
           });
           // Sorting here also includes older records without a createdAt field.
@@ -125,12 +136,10 @@ export default function AdminUsersScreen() {
   const newToday = users.filter(user => user.joinedAt !== null && dateKey(user.joinedAt) === today).length;
   const hasActivity = users.some(user => user.isOnline !== null);
   const activeNow = users.filter(user => user.isOnline === true).length;
+  const blockedCount = users.filter(user => user.blockedUntil !== null && user.blockedUntil > now).length;
   const filteredUsers = users.filter(user => {
-    const genderMatches = genderFilter === 'All Users'
-      || (genderFilter === 'Male' && ['male', 'man'].includes(user.gender))
-      || (genderFilter === 'Female' && ['female', 'woman'].includes(user.gender))
-      || (genderFilter === 'Others' && !['male', 'man', 'female', 'woman'].includes(user.gender));
-    return genderMatches
+    const statusMatches = userFilter === 'All Users' || (user.blockedUntil !== null && user.blockedUntil > now);
+    return statusMatches
       && (!todayOnly || (user.joinedAt !== null && dateKey(user.joinedAt) === today))
       && [user.name, user.email, user.id, user.location].some(value => value.toLowerCase().includes(searchTerm));
   }).sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name)
@@ -143,6 +152,20 @@ export default function AdminUsersScreen() {
     ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Colombo' })
     : 'Not available';
   const ready = !loading && !error;
+  const confirmBlock = async () => {
+    if (!blockTarget || blockBusy.current) return;
+    blockBusy.current = true; setBlocking(true); setBlockError('');
+    try {
+      if (unblocking) await unblockUser(blockTarget.id);
+      else await blockUser(blockTarget.id, blockDays);
+      setBlockTarget(null);
+    }
+    catch (cause) {
+      setBlockError((cause as { code?: string }).code === 'permission-denied'
+        ? 'This action was not permitted. Publish the updated Firestore rules and verify your admin account.'
+        : cause instanceof Error ? cause.message : 'Could not update this block. Please retry.');
+    } finally { blockBusy.current = false; setBlocking(false); }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -196,21 +219,23 @@ export default function AdminUsersScreen() {
         </TouchableOpacity>}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={styles.filterContent}>
-        {genderFilters.map(filter => <TouchableOpacity key={filter} accessibilityRole="button"
-          accessibilityState={{ selected: genderFilter === filter }} onPress={() => setGenderFilter(filter)}
-          style={[styles.chip, genderFilter === filter && styles.selectedChip]}>
-          <Text style={[styles.chipText, genderFilter === filter && styles.selectedChipText]}>{filter}</Text>
-          {filter === 'All Users' && ready && <View style={[styles.chipCount, genderFilter === filter && styles.selectedChipCount]}>
-            <Text style={[styles.chipCountText, genderFilter === filter && styles.selectedChipText]}>{users.length}</Text>
+        <View style={styles.userFilters}>
+        {userFilters.map(filter => <TouchableOpacity key={filter} accessibilityRole="button" accessibilityLabel={filter === 'Blocked' ? 'Show blocked users' : 'Show all registered users'}
+          accessibilityState={{ selected: userFilter === filter }} onPress={() => setUserFilter(filter)}
+          style={[styles.chip, userFilter === filter && styles.selectedChip]}>
+          <Text style={[styles.chipText, userFilter === filter && styles.selectedChipText]}>{filter}</Text>
+          {ready && <View style={[styles.chipCount, userFilter === filter && styles.selectedChipCount]}>
+            <Text style={[styles.chipCountText, userFilter === filter && styles.selectedChipText]}>{filter === 'All Users' ? users.length : blockedCount}</Text>
           </View>}
         </TouchableOpacity>)}
+        </View>
         <TouchableOpacity style={styles.chip} accessibilityRole="button" accessibilityLabel={`Sort users: ${sort}`}
           onPress={() => setSort(current => current === 'newest' ? 'oldest' : current === 'oldest' ? 'name' : 'newest')}>
           <Ionicons name="swap-vertical" size={14} color="#9AAAC2" /><Text style={styles.chipText}>Sort {sort === 'newest' ? '↓' : sort === 'oldest' ? '↑' : 'A–Z'}</Text>
         </TouchableOpacity>
       </ScrollView>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{todayOnly ? 'Today’s sign-ups' : 'Registered users'}</Text>
+        <Text style={styles.sectionTitle}>{userFilter === 'Blocked' ? 'Blocked users' : todayOnly ? 'Today’s sign-ups' : 'Registered users'}</Text>
         <TouchableOpacity disabled={!ready} accessibilityRole="button"
           onPress={() => { setBatchMode(value => !value); setSelectedIds([]); }} style={styles.batchButton}>
           <Text style={styles.batchText}>{batchMode ? 'Done' : 'Batch select'}</Text><Ionicons name="chevron-forward" size={14} color="#E8505B" />
@@ -238,8 +263,8 @@ export default function AdminUsersScreen() {
           ListHeaderComponent={searchTerm ? <Text style={styles.results}>{filteredUsers.length} {filteredUsers.length === 1 ? 'match' : 'matches'}</Text> : null}
           ListEmptyComponent={<View style={styles.empty}>
             <Ionicons name="people-outline" size={48} color="#CCC" />
-            <Text style={styles.emptyTitle}>{users.length ? 'No matching users' : 'No registered users yet'}</Text>
-            <Text style={styles.stateText}>{users.length ? 'Try another search or filter. Missing gender details appear under Others.' : 'New sign-ups will appear here automatically.'}</Text>
+            <Text style={styles.emptyTitle}>{userFilter === 'Blocked' && blockedCount === 0 ? 'No blocked users' : users.length ? 'No matching users' : 'No registered users yet'}</Text>
+            <Text style={styles.stateText}>{userFilter === 'Blocked' && blockedCount === 0 ? 'There are no active account blocks.' : users.length ? 'Try another search or filter.' : 'New sign-ups will appear here automatically.'}</Text>
           </View>}
           renderItem={({ item }) => (
             <View style={[styles.card, batchMode && selectedIds.includes(item.id) && styles.selectedCard]}>
@@ -274,23 +299,41 @@ export default function AdminUsersScreen() {
               <View style={styles.joinedRow}>
                 <View><Text style={styles.joinedLabel}>Joined</Text><Text style={styles.joinedDate}>{displayDate(item.joinedAt)}</Text></View>
                 <View style={styles.statusRow}><View style={[styles.statusDot, (item.status === 'active' || item.isOnline === true) && styles.onlineDot]} />
-                  <Text style={styles.statusText}>{item.isOnline === true ? 'Active' : item.status === 'registered' ? 'Registered' : item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Text>
+                  <Text style={styles.statusText}>{item.blockedUntil && item.blockedUntil > now ? 'Blocked' : item.isOnline === true ? 'Active' : item.status === 'registered' ? 'Registered' : item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Text>
                 </View>
               </View>
               <View style={styles.cardActions}>
-                <TouchableOpacity style={styles.actionsInfo} onPress={() => setInfo({ title: 'Account actions', message: 'Blocking and removing users are not available yet. You can view, search, and select users here.' })}
+                <TouchableOpacity style={styles.actionsInfo} onPress={() => setInfo({ title: 'Account actions', message: item.blockedUntil && item.blockedUntil > now ? `Blocked until ${new Date(item.blockedUntil).toLocaleString(undefined, { timeZone: 'Asia/Colombo' })} (Sri Lanka time). Access resumes automatically.` : 'Block this account for one week or one month (30 days). Access resumes automatically when the selected period ends.' })}
                   accessibilityRole="button" accessibilityLabel="Account action availability"><Ionicons name="information-circle-outline" size={16} color="#9AAAC2" /></TouchableOpacity>
-                <TouchableOpacity disabled accessibilityRole="button" accessibilityState={{ disabled: true }} style={[styles.actionButton, styles.blockButton]}>
-                  <Ionicons name="ban-outline" size={14} color="#E99A20" /><Text style={styles.blockText}>Block</Text>
-                </TouchableOpacity>
-                <TouchableOpacity disabled accessibilityRole="button" accessibilityState={{ disabled: true }} style={[styles.actionButton, styles.removeButton]}>
-                  <Ionicons name="trash-outline" size={14} color="#E8505B" /><Text style={styles.removeText}>Remove</Text>
+                <TouchableOpacity disabled={item.id === auth.currentUser?.uid} accessibilityRole="button" accessibilityLabel={`${item.blockedUntil && item.blockedUntil > now ? 'Unblock' : 'Block'} ${item.name || item.email}`}
+                  onPress={() => { setBlockTarget(item); setUnblocking(!!(item.blockedUntil && item.blockedUntil > now)); setBlockDays(7); setBlockError(''); }} style={[styles.actionButton, styles.blockButton, !!(item.blockedUntil && item.blockedUntil > now) && styles.blockedButton]}>
+                  <Ionicons name={item.blockedUntil && item.blockedUntil > now ? 'checkmark-circle-outline' : 'ban-outline'} size={14} color={item.blockedUntil && item.blockedUntil > now ? '#E8505B' : '#E99A20'} /><Text style={[styles.blockText, !!(item.blockedUntil && item.blockedUntil > now) && styles.blockedButtonText]}>{item.blockedUntil && item.blockedUntil > now ? 'Unblock' : 'Block'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
         />
       )}
+      <Modal visible={blockTarget !== null} transparent animationType="fade" onRequestClose={() => { if (!blocking) setBlockTarget(null); }}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} disabled={blocking} onPress={() => setBlockTarget(null)} accessibilityLabel="Cancel blocking" />
+          <View style={styles.modalCard} accessibilityViewIsModal>
+            <Text style={styles.sectionTitle}>{unblocking ? 'Unblock user' : 'Block user'}</Text>
+            <Text style={styles.modalMessage}>{blockTarget?.name || blockTarget?.email}</Text>
+            <Text style={styles.modalMessage}>{unblocking ? `Restore this user's access now? The current block ends on ${displayDate(blockTarget?.blockedUntil ?? null)}.` : 'Choose how long to block this account. Access resumes automatically afterward.'}</Text>
+            {!unblocking && <View style={styles.blockOptions}>
+              {([7, 30] as const).map(days => <TouchableOpacity key={days} disabled={blocking} accessibilityRole="radio" accessibilityState={{ checked: blockDays === days }} onPress={() => setBlockDays(days)} style={[styles.chip, blockDays === days && styles.selectedChip]}>
+                <Text style={[styles.chipText, blockDays === days && styles.selectedChipText]}>{days === 7 ? '1 week' : '1 month (30 days)'}</Text>
+              </TouchableOpacity>)}
+            </View>}
+            {!!blockError && <Text style={styles.blockError} accessibilityRole="alert">{blockError}</Text>}
+            <View style={styles.blockOptions}>
+              <TouchableOpacity style={styles.chip} disabled={blocking} onPress={() => setBlockTarget(null)} accessibilityRole="button"><Text style={styles.chipText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.chip, styles.selectedChip]} disabled={blocking} onPress={confirmBlock} accessibilityRole="button"><Text style={styles.selectedChipText}>{blocking ? (unblocking ? 'Unblocking...' : 'Blocking...') : (unblocking ? 'Unblock user' : 'Block user')}</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={info !== null} transparent animationType="fade" onRequestClose={() => setInfo(null)}>
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setInfo(null)} accessibilityRole="button" accessibilityLabel="Close details" />
@@ -342,7 +385,8 @@ const styles = StyleSheet.create({
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 12, marginBottom: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E7ECF4', borderRadius: 16, backgroundColor: '#FFF' },
   searchInput: { flex: 1, minWidth: 0, paddingVertical: 12, fontSize: 12, color: '#15203A' },
   filters: { flexGrow: 0, flexShrink: 0, marginBottom: 18 },
-  filterContent: { paddingHorizontal: 12, gap: 7, alignItems: 'center' },
+  filterContent: { flexGrow: 1, justifyContent: 'space-between', paddingHorizontal: 12, gap: 7, alignItems: 'center' },
+  userFilters: { flexDirection: 'row', gap: 7, alignItems: 'center' },
   chip: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: '#E7ECF4', backgroundColor: '#FFF' },
   selectedChip: { backgroundColor: '#E8505B', borderColor: '#E8505B' },
   chipText: { color: '#71829D', fontSize: 11, fontWeight: '600' },
@@ -385,11 +429,13 @@ const styles = StyleSheet.create({
   statusText: { color: '#71829D', fontSize: 10, fontWeight: '600' },
   cardActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: '#F0F3F8', paddingTop: 7 },
   actionsInfo: { marginRight: 'auto', padding: 3 },
-  actionButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, opacity: 0.65 },
+  actionButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
   blockButton: { backgroundColor: '#FFF9E9', borderColor: '#FFE4A5' },
-  removeButton: { backgroundColor: '#FFF1F3', borderColor: '#FFDDE4' },
   blockText: { color: '#E99A20', fontSize: 11, fontWeight: '600' },
-  removeText: { color: '#E8505B', fontSize: 11, fontWeight: '600' },
+  blockedButton: { backgroundColor: '#FFF1F3', borderColor: '#E8505B' },
+  blockedButtonText: { color: '#E8505B' },
+  blockOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 20 },
+  blockError: { color: '#E8505B', fontSize: 13, marginTop: 16, lineHeight: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(21,32,58,0.3)', padding: 24, justifyContent: 'center' },
   modalCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, maxHeight: '80%' },
   modalHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },

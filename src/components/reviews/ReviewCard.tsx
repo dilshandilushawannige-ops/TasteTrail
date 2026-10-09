@@ -60,20 +60,20 @@ export function ReviewCard({ review, signatureDish, restaurantName = 'Restaurant
         {uid === review.userId && <TouchableOpacity accessibilityLabel="Review options" onPress={() => setMenuOpen(value => !value)} style={styles.options}><Ionicons name="ellipsis-horizontal" size={19} color="#8D9DB7" /></TouchableOpacity>}
       </View>
       {menuOpen && uid === review.userId && <View style={styles.menu}>
-        <TouchableOpacity accessibilityLabel="Update your review" disabled={busy} onPress={() => { setMenuOpen(false); setEditing(true); }}><Text style={styles.selectedText}>Update</Text></TouchableOpacity>
-        <TouchableOpacity accessibilityLabel="Delete your review" disabled={busy} onPress={() => perform(() => deleteReview(review.id))}><Text style={styles.selectedText}>Delete</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Update your review" style={[styles.reviewButton, styles.updateButton, busy && styles.disabledButton]} disabled={busy} onPress={() => { setMenuOpen(false); setEditing(true); }}><Text style={styles.updateButtonText}>Update</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Delete your review" style={[styles.reviewButton, styles.deleteButton, busy && styles.disabledButton]} disabled={busy} onPress={() => perform(() => deleteReview(review.id))}><Text style={styles.deleteButtonText}>Delete</Text></TouchableOpacity>
       </View>}
       <View style={styles.tags}>{[review.recipeId ? undefined : review.diningType, review.mealTime, review.recipeId && review.wouldMakeAgain ? `Make again: ${review.wouldMakeAgain}` : undefined].filter(Boolean).map((tag, index) => <View key={`${tag}-${index}`} style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>)}</View>
       <Text style={styles.comment}>{review.comment}</Text>
       {!!review.media?.length && <View style={styles.attachments}>
         {review.media.map((media, index) => <TouchableOpacity key={`${media.url}-${index}`} style={styles.thumbnail} accessibilityLabel={`Open review ${media.type} ${index + 1}`} onPress={() => openMedia(media)}>
-          {media.type === 'image' ? <Image source={{ uri: media.url }} style={styles.thumbnailImage} /> : <View style={styles.video}><Ionicons name="play-circle" size={32} color="#B5213B" /><Text style={styles.tagText}>Video</Text></View>}
+          {media.type === 'image' ? <Image source={{ uri: media.url }} style={styles.thumbnailImage} /> : <View style={styles.video}><Ionicons name="play-circle" size={32} color="#E8505B" /><Text style={styles.tagText}>Video</Text></View>}
         </TouchableOpacity>)}
         {!!signatureDish && <View style={styles.dishTile}><Ionicons name="restaurant-outline" size={19} color="#DF7B08" /><Text style={styles.dishText}>{signatureDish}</Text></View>}
       </View>}
       <View style={styles.footer}>
         <TouchableOpacity disabled={busy} accessibilityRole="button" accessibilityState={{ selected: helpful }} onPress={() => perform(() => toggleReviewHelpful(review.id))} style={styles.footerAction}>
-          <Ionicons name={helpful ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={helpful ? '#B5213B' : '#8191AC'} /><Text style={[styles.actionText, helpful && styles.selectedText]}>Helpful ({review.helpfulUserIds?.length || 0})</Text>
+          <Ionicons name={helpful ? 'thumbs-up' : 'thumbs-up-outline'} size={15} color={helpful ? '#E8505B' : '#8191AC'} /><Text style={[styles.actionText, helpful && styles.selectedText]}>Helpful ({review.helpfulUserIds?.length || 0})</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowComments(value => !value)} style={styles.footerAction}><Ionicons name="chatbubble-outline" size={15} color="#8191AC" /><Text style={styles.actionText}>Comment</Text></TouchableOpacity>
       </View>
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20 },
-  avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F65B73', alignItems: 'center', justifyContent: 'center' },
+  avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E8505B', alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   userDetails: { flex: 1, gap: 5 },
   userName: { color: '#1B2236', fontSize: 15, fontWeight: '700' },
@@ -134,15 +134,21 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15 },
   footerAction: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6 },
   actionText: { fontSize: 12, color: '#8191AC' },
-  selectedText: { color: '#B5213B', fontSize: 12, fontWeight: '600' },
-  menu: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingVertical: 12 },
+  selectedText: { color: '#E8505B', fontSize: 12, fontWeight: '600' },
+  menu: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingVertical: 12 },
+  reviewButton: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  updateButton: { backgroundColor: '#E8505B', borderColor: '#E8505B' },
+  deleteButton: { backgroundColor: '#FFF', borderColor: '#E8505B' },
+  updateButtonText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  deleteButtonText: { color: '#E8505B', fontSize: 13, fontWeight: '600' },
+  disabledButton: { opacity: 0.5 },
   commentArea: { gap: 10, marginTop: 12, borderTopWidth: 1, borderTopColor: '#F0F3FA', paddingTop: 12 },
   reply: { gap: 3 },
   replyName: { fontSize: 12, color: '#1B2236', fontWeight: '600' },
   replyText: { fontSize: 12, lineHeight: 18, color: '#54627B' },
   commentInput: { backgroundColor: '#F5F7FC', borderRadius: 8, padding: 10, minHeight: 60, fontSize: 13, color: '#54627B', textAlignVertical: 'top' },
   postComment: { alignSelf: 'flex-end', padding: 8 },
-  error: { color: '#B5213B', fontSize: 12, lineHeight: 18, marginTop: 8 },
+  error: { color: '#E8505B', fontSize: 12, lineHeight: 18, marginTop: 8 },
   preview: { flex: 1, backgroundColor: '#000E', justifyContent: 'center' },
   closePreview: { position: 'absolute', top: 50, right: 20, zIndex: 1, padding: 8 },
   previewImage: { width: '100%', height: '80%' },

@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CLOUDINARY_CONFIG } from '@/config/cloudinary';
+import AnnouncementManager from '@/components/admin/AnnouncementManager';
 import { auth, db } from '@/firebaseConfig';
 
 interface AdminProfile {
@@ -38,6 +39,7 @@ export default function AdminProfileScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [announcementVisible, setAnnouncementVisible] = useState(false);
   
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -347,6 +349,17 @@ export default function AdminProfileScreen() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <TouchableOpacity style={[styles.infoCard, styles.announcementRow]} accessibilityRole="button" accessibilityLabel="Open announcements" onPress={() => setAnnouncementVisible(true)}>
+            <View style={styles.logoutIcon}><Ionicons name="megaphone-outline" size={22} color="#E8505B" /></View>
+            <View style={styles.logoutContent}>
+              <Text style={styles.infoValue}>Announcements</Text>
+              <Text style={styles.logoutSubtext}>Create a message for all users</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#E8505B" />
+          </TouchableOpacity>
+        </View>
+
         {/* Logout Section */}
         <View style={styles.section}>
           <View style={styles.dangerCard}>
@@ -377,11 +390,13 @@ export default function AdminProfileScreen() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
+      {announcementVisible && <AnnouncementManager visible onClose={() => setAnnouncementVisible(false)} />}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  announcementRow: { flexDirection: 'row', alignItems: 'center' },
   container: {
     flex: 1,
     backgroundColor: '#FAFAF7',

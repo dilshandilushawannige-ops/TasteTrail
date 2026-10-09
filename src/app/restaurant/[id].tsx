@@ -566,10 +566,10 @@ export default function RestaurantDetailsScreen() {
           )}
           {activeTab === 'reviews' && (
             <View style={styles.tabContent}>
-              {reviewsLoading && <ActivityIndicator color="#B5213B" style={{ marginVertical: 24 }} />}
+              {reviewsLoading && <ActivityIndicator color="#E8505B" style={{ marginVertical: 24 }} />}
               {reviewsError && <View style={styles.emptyState}>
                 <Text accessibilityRole="alert" style={styles.emptyStateSubtext}>{reviewsError}</Text>
-                <TouchableOpacity onPress={refreshReviews}><Text style={{ color: '#B5213B' }}>Retry</Text></TouchableOpacity>
+                <TouchableOpacity onPress={refreshReviews}><Text style={{ color: '#E8505B' }}>Retry</Text></TouchableOpacity>
               </View>}
               {!reviewsLoading && !reviewsError && reviews.length === 0 && <View style={styles.emptyState}>
                 <Ionicons name="chatbubble-outline" size={48} color="#6B7488" />
@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
   writeReviewButton: {
     backgroundColor: '#E8505B',
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 26,
     alignItems: 'center',
     marginTop: 8,
   },
