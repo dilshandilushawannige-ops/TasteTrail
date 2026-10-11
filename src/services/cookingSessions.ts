@@ -78,16 +78,23 @@ function parseRecipe(
       ? data.imageUrl.trim()
       : undefined;
 
+  const ingredients = Array.isArray(data.ingredients)
+    ? data.ingredients
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .map((item) => `${item.amount ?? ''} ${item.unit ?? ''} ${item.name ?? ''}`.trim())
+      .filter(Boolean)
+      .join(', ')
+    : typeof data.ingredients === 'string'
+      ? data.ingredients
+      : '';
+
   return {
     id,
     name:
       typeof data.name === 'string'
         ? data.name
         : 'Recipe',
-    ingredients:
-      typeof data.ingredients === 'string'
-        ? data.ingredients
-        : '',
+    ingredients,
     steps: data.steps as string[],
     ...(imageUrl !== undefined ? { imageUrl } : {}),
   };

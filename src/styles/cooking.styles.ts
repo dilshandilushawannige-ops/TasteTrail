@@ -3,16 +3,29 @@ import { StyleSheet } from 'react-native';
 export const cookingStyles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAF7',
+  },
+
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  timerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 
   scroll: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 8,
     paddingBottom: 80,
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
-    gap: 16,
+    gap: 14,
   },
 
   row: {
@@ -34,37 +47,35 @@ export const cookingStyles = StyleSheet.create({
   },
 
   title: {
-    color: '#202536',
-    fontSize: 28,
-    fontWeight: '700',
-    lineHeight: 35,
+    color: '#111827',
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 28,
   },
 
   muted: {
     color: '#6B7280',
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 19,
   },
 
   card: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E8E3',
-    borderRadius: 20,
-    padding: 20,
-    gap: 16,
+    borderRadius: 16,
+    padding: 15,
+    gap: 14,
   },
 
   heading: {
-    color: '#202536',
-    fontSize: 20,
-    fontWeight: '700',
+    color: '#111827',
+    fontSize: 17,
+    fontWeight: '800',
   },
 
   text: {
-    color: '#303746',
-    fontSize: 17,
-    lineHeight: 28,
+    color: '#374151',
+    fontSize: 14,
+    lineHeight: 21,
   },
 
   instruction: {
@@ -76,18 +87,20 @@ export const cookingStyles = StyleSheet.create({
 
   tabs: {
     flexDirection: 'row',
-    borderRadius: 16,
-    backgroundColor: '#EEEDE9',
-    padding: 4,
+    borderRadius: 20,
+    backgroundColor: '#F0F0ED',
+    padding: 5,
     gap: 4,
   },
 
   tab: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 12,
+    minHeight: 42,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
     padding: 10,
   },
 
@@ -96,33 +109,35 @@ export const cookingStyles = StyleSheet.create({
   },
 
   tabText: {
-    color: '#414958',
-    fontSize: 15,
+    color: '#6B7280',
+    fontSize: 12,
     fontWeight: '600',
   },
 
   button: {
-    minHeight: 48,
-    borderRadius: 14,
-    paddingVertical: 13,
+    minHeight: 44,
+    borderRadius: 22,
+    paddingVertical: 11,
     paddingHorizontal: 18,
     backgroundColor: '#E8505B',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
   },
 
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
 
   secondary: {
-    backgroundColor: '#EEEDE9',
+    backgroundColor: '#FFF0F1',
   },
 
   secondaryText: {
-    color: '#303746',
+    color: '#E8505B',
   },
 
   disabled: {
@@ -192,7 +207,7 @@ export const cookingStyles = StyleSheet.create({
 
   recipeImageWrapper: {
     // Sits between the recipe title and the ingredient/steps tabs.
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     backgroundColor: '#F0EFEA', // neutral cream — visible while loading
     // Enforce a 16:9 aspect ratio that works on all screen widths.
@@ -232,9 +247,9 @@ export const cookingStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    paddingVertical: 8,
-    minHeight: 44,
+    paddingHorizontal: 0,
+    paddingVertical: 6,
+    minHeight: 42,
   },
 
   headerButton: {
@@ -246,9 +261,9 @@ export const cookingStyles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#202536',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
     flex: 1,
     textAlign: 'center',
   },
@@ -274,10 +289,10 @@ export const cookingStyles = StyleSheet.create({
   },
 
   stepBadge: {
-    backgroundColor: '#FFF0EF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#FFF0F1',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
 
   stepBadgeText: {
@@ -294,10 +309,8 @@ export const cookingStyles = StyleSheet.create({
 
   instructionCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E8E3',
     borderRadius: 16,
-    padding: 20,
+    padding: 15,
     gap: 12,
   },
 
