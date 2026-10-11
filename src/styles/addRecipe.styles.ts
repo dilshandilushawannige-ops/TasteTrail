@@ -91,6 +91,23 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
   },
+  ingredientItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  ingredientAmountRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  ingredientAmountInput: {
+    flex: 1,
+  },
+  ingredientUnitInput: {
+    flex: 1.4,
+  },
   inputWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,7 +357,6 @@ export const styles = StyleSheet.create({
   selectedImage: {
     width: '100%',
     height: 200,
-    resizeMode: 'cover',
   },
   removeImageButton: {
     flexDirection: 'row',

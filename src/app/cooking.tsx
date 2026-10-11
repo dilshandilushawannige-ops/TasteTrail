@@ -6,13 +6,11 @@ import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as Speech from 'expo-speech';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle } from 'react-native-svg';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ReviewCard } from '@/components/reviews/ReviewCard';
-import { WriteReviewSheet } from '@/components/reviews/WriteReviewSheet';
-import { useRecipeReviews } from '@/hooks/useRecipeReviews';
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
@@ -21,48 +19,53 @@ function message(error: unknown) {
 function CircularTimer({ remaining, total }: { remaining: number; total: number }) {
   const size = 120;
   const strokeWidth = 8;
-  const progress = total > 0 ? remaining / total : 0;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = total > 0 ? Math.min(1, Math.max(0, remaining / total)) : 0;
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
       accessibilityRole="progressbar"
       accessibilityLabel={`${Math.floor(remaining / 60)} minutes ${remaining % 60} seconds remaining`}
     >
-      <View style={{ 
-        width: size, 
-        height: size, 
-        borderRadius: size / 2, 
-        borderWidth: strokeWidth, 
-        borderColor: '#F3E7E8',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative'
-      }}>
-        {/* Progress arc using overlaid View - simplified for React Native without SVG */}
-        <View style={{
-          position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: strokeWidth,
-          borderColor: 'transparent',
-          borderTopColor: '#E8505B',
-          borderRightColor: progress > 0.25 ? '#E8505B' : 'transparent',
-          borderBottomColor: progress > 0.5 ? '#E8505B' : 'transparent',
-          borderLeftColor: progress > 0.75 ? '#E8505B' : 'transparent',
-          transform: [{ rotate: `${-90 + (1 - progress) * 360}deg` }]
-        }} />
-      </View>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#F3E7E8"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#E8505B"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={circumference * (1 - progress)}
+          fill="none"
+          rotation="-90"
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
     </View>
   );
 }
 
-function Button({ title, onPress, disabled = false, secondary = false }: {
-  title: string; onPress: () => void; disabled?: boolean; secondary?: boolean;
+function Button({ title, onPress, disabled = false, secondary = false, icon }: {
+  title: string;
+  onPress: () => void;
+  disabled?: boolean;
+  secondary?: boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
 }) {
   return (
     <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress}
       style={[styles.button, secondary && styles.secondary, disabled && styles.disabled]}>
+      {icon && <Ionicons name={icon} size={17} color={secondary ? '#E8505B' : '#FFFFFF'} />}
       <Text style={[styles.buttonText, secondary && styles.secondaryText]}>{title}</Text>
     </Pressable>
   );
@@ -88,8 +91,6 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
   const [clock, setClock] = useState(() => Date.now());
   const [showVoicePlayer, setShowVoicePlayer] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [writeReviewVisible, setWriteReviewVisible] = useState(false);
-  const { reviews, loading: reviewsLoading, error: reviewsError, refresh: refreshReviews, submitReview } = useRecipeReviews(recipeId || '');
   const [confirmCookAgain, setConfirmCookAgain] = useState(false);
   const lock = useRef(false);
   const generation = useRef(0);
@@ -397,6 +398,11 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
               <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: tab === value }}
                 onPress={() => changeTab(value)} disabled={busy}
                 style={[styles.tab, tab === value && styles.tabActive]}>
+                <Ionicons
+                  name={value === 'ingredients' ? 'restaurant-outline' : 'list-outline'}
+                  size={16}
+                  color={tab === value ? '#E8505B' : '#6B7280'}
+                />
                 <Text style={styles.tabText}>{value === 'ingredients' ? 'Ingredients' : 'Cooking steps'}</Text>
               </Pressable>
             ))}
@@ -411,14 +417,14 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
                   : 'Great job! Want to cook this recipe again?'}
               </Text>
               {!confirmCookAgain ? (
-                <Button title="Cook Again" onPress={() => setConfirmCookAgain(true)} disabled={busy} />
+                <Button title="Cook Again" icon="refresh-outline" onPress={() => setConfirmCookAgain(true)} disabled={busy} />
               ) : (
                 <View style={styles.row}>
                   <View style={styles.flex}>
-                    <Button title="Yes, start fresh" onPress={() => void cookAgain()} disabled={busy} />
+                    <Button title="Yes, start fresh" icon="refresh-outline" onPress={() => void cookAgain()} disabled={busy} />
                   </View>
                   <View style={styles.flex}>
-                    <Button title="Cancel" secondary onPress={() => setConfirmCookAgain(false)} disabled={busy} />
+                    <Button title="Cancel" icon="close-outline" secondary onPress={() => setConfirmCookAgain(false)} disabled={busy} />
                   </View>
                 </View>
               )}
@@ -427,21 +433,28 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
 
           {tab === 'ingredients' ? (
             <View style={styles.card}>
-              <Text style={styles.heading}>Ingredients</Text>
+              <View style={styles.headingRow}>
+                <Ionicons name="restaurant-outline" size={20} color="#E8505B" />
+                <Text style={styles.heading}>Ingredients</Text>
+              </View>
               <Text style={styles.text}>{recipe.ingredients || 'No ingredient list was provided.'}</Text>
               <View style={styles.row}>
-                <Button title="Read ingredients aloud" secondary onPress={readAloud} disabled={busy || !recipe.ingredients} />
-                <Button title="Stop voice" secondary onPress={stopVoice} />
+                <Button title="Read ingredients aloud" icon="volume-high-outline" secondary onPress={readAloud} disabled={busy || !recipe.ingredients} />
+                <Button title="Stop voice" icon="stop-circle-outline" secondary onPress={stopVoice} />
               </View>
               {session?.status !== 'completed' && <Button disabled={blocked}
                 title={busy ? 'Saving…' : session ? `Resume step ${session.currentStepIndex + 1}` : 'Start cooking'}
+                icon={session ? 'play-forward-outline' : 'flame-outline'}
                 onPress={() => { if (session) changeTab('steps'); else void begin(); }} />}
             </View>
           ) : !session ? (
             <View style={styles.card}>
-              <Text style={styles.heading}>{recipe.steps.length} cooking steps</Text>
+              <View style={styles.headingRow}>
+                <Ionicons name="list-outline" size={20} color="#E8505B" />
+                <Text style={styles.heading}>{recipe.steps.length} cooking steps</Text>
+              </View>
               <Text style={styles.muted}>Start a session to follow the instructions and save your progress.</Text>
-              <Button title="Start cooking" onPress={() => void begin()} disabled={blocked} />
+              <Button title="Start cooking" icon="flame-outline" onPress={() => void begin()} disabled={blocked} />
             </View>
           ) : (
             <View style={styles.stepsCard}>
@@ -476,7 +489,10 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
 
           {session?.status === 'in_progress' && (
             <View style={styles.timerCard}>
-              <Text style={styles.timerCardLabel}>Cooking Timer</Text>
+              <View style={styles.timerTitleRow}>
+                <Ionicons name="timer-outline" size={20} color="#E8505B" />
+                <Text style={styles.timerCardLabel}>Cooking Timer</Text>
+              </View>
               <CircularTimer remaining={remaining} total={session.timerRemainingSeconds} />
               <Text style={styles.timerDigital}>{timeLabel}</Text>
               {remaining === 0 && (
@@ -493,11 +509,12 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
                   maxLength={6}
                   placeholder="Minutes"
                 />
-                <Button title="Set" onPress={setTimer} secondary disabled={blocked} />
+                <Button title="Set" icon="checkmark-outline" onPress={setTimer} secondary disabled={blocked} />
               </View>
               <Button
                 disabled={blocked || remaining === 0}
                 title={session.timerEndAt ? 'Pause Timer' : 'Start Timer'}
+                icon={session.timerEndAt ? 'pause-outline' : 'play-outline'}
                 onPress={() => {
                   if (session.timerEndAt) {
                     void save({
@@ -552,6 +569,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
               <View style={styles.bottomNavPrevious}>
                 <Button
                   title="Previous"
+                  icon="arrow-back-outline"
                   secondary
                   disabled={blocked || session.currentStepIndex === 0}
                   onPress={() => {
@@ -564,6 +582,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
                 <Button
                   disabled={blocked}
                   title={busy ? 'Saving…' : session.currentStepIndex === recipe.steps.length - 1 ? 'Finish Cooking' : 'Next Step'}
+                  icon={session.currentStepIndex === recipe.steps.length - 1 ? 'checkmark-circle-outline' : 'arrow-forward-outline'}
                   onPress={() => void nextStep()}
                 />
               </View>
@@ -579,41 +598,15 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
               <Text style={styles.danger}>Delete saved progress and timer for this recipe?</Text>
               <Text style={styles.muted}>The recipe and your bookmark will remain.</Text>
               <View style={styles.row}>
-                <Button title="Yes, delete session" disabled={busy} onPress={() => void run(async (uid, token) => {
+                <Button title="Yes, delete session" icon="trash-outline" disabled={busy} onPress={() => void run(async (uid, token) => {
                   await deleteCooking(uid, recipe.id);
                   if (token !== generation.current) return;
                   setSession(null); setConfirmDelete(false); setTab('ingredients');
                 })} />
-                <Button title="Cancel" secondary disabled={busy} onPress={() => setConfirmDelete(false)} />
+                <Button title="Cancel" icon="close-outline" secondary disabled={busy} onPress={() => setConfirmDelete(false)} />
               </View>
             </>}
           </View>}
-          <View style={styles.card}>
-            <Text style={styles.heading}>Recipe reviews</Text>
-            {reviewsLoading && <ActivityIndicator size="small" color="#E8505B" />}
-            {!!reviewsError && <>
-              <Text style={styles.muted}>{reviewsError}</Text>
-              <Button title="Retry reviews" secondary onPress={() => void refreshReviews()} />
-            </>}
-            {!reviewsLoading && !reviewsError && reviews.length === 0 && (
-              <Text style={styles.muted}>No reviews yet. Share how this recipe turned out.</Text>
-            )}
-            {reviews.map(review => (
-              <ReviewCard key={review.id} review={review} restaurantName={recipe.name}
-                restaurantPhoto={displayImageUrl} />
-            ))}
-            <Button title="Write a review" onPress={() => setWriteReviewVisible(true)} disabled={blocked} />
-          </View>
-          <WriteReviewSheet
-            key={recipe.id}
-            visible={writeReviewVisible}
-            onClose={() => setWriteReviewVisible(false)}
-            onSubmit={submitReview}
-            recipeId={recipe.id}
-            restaurantName={recipe.name}
-            restaurantPhoto={displayImageUrl}
-            targetLabel="recipe"
-          />
         </>}
       </ScrollView>
     </SafeAreaView>
