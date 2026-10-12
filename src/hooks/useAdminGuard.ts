@@ -40,8 +40,7 @@ export function useAdminGuard(): UseAdminGuardResult {
     try {
       setError(null);
       
-      // Refresh token to get latest claims
-      await currentUser.getIdToken(true);
+      // Use the cached token during normal route checks to avoid repeated Auth requests.
       const idTokenResult = await currentUser.getIdTokenResult();
       const claims = idTokenResult.claims as AdminClaims;
       

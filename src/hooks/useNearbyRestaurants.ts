@@ -7,13 +7,84 @@ import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { subscribeToRestaurants, Restaurant } from '@/services/restaurantService';
 import { calculateDistance, Coordinates } from '@/utils/distance';
-import { DISCOVER_RADIUS_KM } from '@/constants/discover';
+import { DISCOVER_RADIUS_KM, DISCOVER_SHOW_WITHOUT_COORDS } from '@/constants/discover';
+import {
+  PROVINCE_ANCHORS,
+  PROVINCE_KEYWORDS,
+  SRI_LANKAN_PROVINCES,
+  type LocationChoice,
+  type ProvinceId,
+} from '@/constants/locations';
+import { reverseGeocode } from '@/services/geocodingService';
+import { DEFAULT_MAP_CENTER } from '@/constants/map';
 
 // Default location (Galle Fort, Sri Lanka)
-const DEFAULT_LOCATION: Coordinates = {
-  latitude: 6.0329,
-  longitude: 80.2168,
+const DEFAULT_LOCATION: Coordinates = DEFAULT_MAP_CENTER;
+
+const provinceNames: Record<ProvinceId, string> = {
+  western: 'western',
+  central: 'central',
+  southern: 'southern',
+  northern: 'northern',
+  eastern: 'eastern',
+  northWestern: 'north western',
+  northCentral: 'north central',
+  uva: 'uva',
+  sabaragamuwa: 'sabaragamuwa',
 };
+
+const provinceCache = new Map<string, ProvinceId | null>();
+
+function normalizeLocationText(value: unknown): string {
+  return String(value ?? '').toLowerCase().trim().replace(/\b(province|district)\b/g, ' ').replace(/\s+/g, ' ');
+}
+
+function findTextProvince(value: unknown): ProvinceId | null {
+  const text = normalizeLocationText(value);
+  if (!text) return null;
+  const matches = (Object.keys(PROVINCE_KEYWORDS) as ProvinceId[]).filter((province) => {
+    const terms = [provinceNames[province], ...PROVINCE_KEYWORDS[province]];
+    return terms.some((term) => text.includes(term));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function validRestaurantCoordinates(restaurant: Restaurant): Coordinates | null {
+  const latitude = Number(restaurant.location?.latitude);
+  const longitude = Number(restaurant.location?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude === 0 || longitude === 0) return null;
+  return { latitude, longitude };
+}
+
+export function getRestaurantProvince(restaurant: Restaurant): ProvinceId | null {
+  const cacheKey = `${restaurant.id}:${String((restaurant as Restaurant & { updatedAt?: unknown }).updatedAt ?? '')}`;
+  if (provinceCache.has(cacheKey)) return provinceCache.get(cacheKey) ?? null;
+  const cityProvince = findTextProvince(restaurant.city);
+  const addressProvince = findTextProvince(restaurant.address);
+  const textProvince = cityProvince ?? addressProvince;
+  if (textProvince) {
+    provinceCache.set(cacheKey, textProvince);
+    return textProvince;
+  }
+  const coords = validRestaurantCoordinates(restaurant);
+  if (!coords) {
+    provinceCache.set(cacheKey, null);
+    return null;
+  }
+  let nearest: ProvinceId | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  (Object.keys(PROVINCE_ANCHORS) as ProvinceId[]).forEach((province) => {
+    PROVINCE_ANCHORS[province].forEach((anchor) => {
+      const distance = calculateDistance(coords, anchor);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = province;
+      }
+    });
+  });
+  provinceCache.set(cacheKey, nearest);
+  return nearest;
+}
 
 export interface UseNearbyRestaurantsReturn {
   // Location state
@@ -34,12 +105,14 @@ export interface UseNearbyRestaurantsReturn {
   sortBy: 'distance' | 'rating';
   searchText: string;
   selectedCategory: string | null;
+  locationFilter: LocationChoice | null;
   
   // Actions
   setSortBy: (sortBy: 'distance' | 'rating') => void;
   setSearchText: (text: string) => void;
   setSelectedCategory: (category: string | null) => void;
   setSearchCenter: (coordinates: Coordinates) => void;
+  setLocationFilter: (choice: LocationChoice | null) => void;
   getCurrentLocation: () => Promise<void>;
   refresh: () => Promise<void>;
   geocodeLocation: (query: string) => Promise<boolean>;
@@ -62,6 +135,11 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
   const [sortBy, setSortBy] = useState<'distance' | 'rating'>('distance');
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [locationFilter, setLocationFilterState] = useState<LocationChoice | null>(null);
+  const setLocationFilter = useCallback((choice: LocationChoice | null) => {
+    setLocationFilterState(choice);
+    if (choice) setCurrentArea(choice.name);
+  }, []);
 
   // Request location permission and get current location
   const getCurrentLocation = useCallback(async () => {
@@ -85,20 +163,13 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
         
         // Get current area name
         try {
-          const reverseGeocode = await Location.reverseGeocodeAsync(coords);
-          if (reverseGeocode.length > 0) {
-            const area = reverseGeocode[0].city || 
-                        reverseGeocode[0].district || 
-                        reverseGeocode[0].region || 
-                        'Unknown Area';
-            setCurrentArea(area);
-          }
-        } catch (error) {
-          console.log('Reverse geocoding failed:', error);
+          const place = await reverseGeocode(coords.latitude, coords.longitude);
+          if (place?.city) setCurrentArea(place.city);
+        } catch {
+          // The GPS location remains usable when reverse geocoding is unavailable.
         }
       }
-    } catch (error) {
-      console.error('Error getting location:', error);
+    } catch {
       setLocationPermission(false);
     } finally {
       setIsLoadingLocation(false);
@@ -115,15 +186,15 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
           longitude: results[0].longitude,
         };
         setSearchCenter(coords);
+        setLocationFilter(null);
         setCurrentArea(query);
         return true;
       }
       return false;
-    } catch (error) {
-      console.error('Geocoding error:', error);
+    } catch {
       return false;
     }
-  }, []);
+  }, [setLocationFilter]);
 
   // Check if restaurant is currently open
   const isRestaurantOpen = useCallback((restaurant: Restaurant): boolean => {
@@ -141,7 +212,7 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
     }
     
     return currentTime >= openTime && currentTime <= closeTime;
-  }, []);
+  }, [setLocationFilter]);
 
   // Filter and sort nearby restaurants
   const nearbyRestaurants = useMemo(() => {
@@ -150,20 +221,33 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
         // Only active/published restaurants
         if (restaurant.status !== 'active') return false;
         
-        const latitude = Number(restaurant.location?.latitude);
-        const longitude = Number(restaurant.location?.longitude);
-        const hasValidCoordinates = Number.isFinite(latitude) &&
-          Number.isFinite(longitude) &&
-          latitude !== 0 &&
-          longitude !== 0;
+        const coords = validRestaurantCoordinates(restaurant);
+        const hasValidCoordinates = Boolean(coords);
 
         if (
+          !locationFilter &&
           userLocation &&
           DISCOVER_RADIUS_KM !== null &&
-          hasValidCoordinates &&
-          calculateDistance(userLocation, { latitude, longitude }) > DISCOVER_RADIUS_KM
+          coords &&
+          calculateDistance(userLocation, coords) > DISCOVER_RADIUS_KM
         ) return false;
+        if (!locationFilter && !hasValidCoordinates && !DISCOVER_SHOW_WITHOUT_COORDS && userLocation) return false;
         
+        if (locationFilter) {
+          const text = normalizeLocationText(`${restaurant.city} ${restaurant.address}`);
+          if (locationFilter.type === 'city') {
+            const textProvince = findTextProvince(restaurant.city) ?? findTextProvince(restaurant.address);
+            const selectedProvince = findTextProvince(locationFilter.name);
+            const withinCity = hasValidCoordinates &&
+              calculateDistance(coords!, locationFilter) <= 10;
+            if (selectedProvince && textProvince && textProvince !== selectedProvince) return false;
+            if (!text.includes(locationFilter.name.toLowerCase()) && !withinCity) return false;
+          } else {
+            const selectedProvince = findTextProvince(locationFilter.name);
+            if (!selectedProvince || getRestaurantProvince(restaurant) !== selectedProvince) return false;
+          }
+        }
+
         // Category filter
         if (selectedCategory && restaurant.category !== selectedCategory) return false;
         
@@ -185,28 +269,19 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
         return true;
       })
       .map(restaurant => {
-        const latitude = Number(restaurant.location?.latitude);
-        const longitude = Number(restaurant.location?.longitude);
-        const hasValidCoordinates = Number.isFinite(latitude) &&
-          Number.isFinite(longitude) &&
-          latitude !== 0 &&
-          longitude !== 0;
+        const coords = validRestaurantCoordinates(restaurant);
         return {
         ...restaurant,
-        distance: userLocation && hasValidCoordinates
-          ? calculateDistance(userLocation, { latitude, longitude })
+        distance: coords
+          ? calculateDistance(userLocation ?? searchCenter, coords)
           : Number.POSITIVE_INFINITY,
         };
       });
 
     // Sort
     filtered.sort((a, b) => {
-      if (sortBy === 'distance' && userLocation) {
+      if (sortBy === 'distance') {
         return a.distance - b.distance;
-      } else if (sortBy === 'distance') {
-        const aTime = a.createdAt?.toMillis?.() || 0;
-        const bTime = b.createdAt?.toMillis?.() || 0;
-        return bTime - aTime;
       } else {
         // Sort by rating, then by review count
         if (a.rating !== b.rating) {
@@ -217,7 +292,7 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
     });
 
     return filtered;
-  }, [restaurants, searchCenter, userLocation, selectedCategory, searchText, sortBy]);
+  }, [restaurants, searchCenter, userLocation, locationFilter, selectedCategory, searchText, sortBy]);
 
   // Get currently open restaurants
   const openRestaurants = useMemo(() => {
@@ -287,12 +362,14 @@ export function useNearbyRestaurants(): UseNearbyRestaurantsReturn {
     sortBy,
     searchText,
     selectedCategory,
+    locationFilter,
     
     // Actions
     setSortBy,
     setSearchText,
     setSelectedCategory,
     setSearchCenter,
+    setLocationFilter,
     getCurrentLocation,
     refresh,
     geocodeLocation,

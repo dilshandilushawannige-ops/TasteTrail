@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAdminGuard } from '@/hooks/useAdminGuard';
+import { AppLoader } from '@/components/AppLoader';
 import { useRestaurantOperations } from '@/hooks/useRestaurantOperations';
 import { getRestaurant } from '@/services/restaurantService';
 import { RestaurantFormProvider, useRestaurantFormContext } from '@/contexts/RestaurantFormContext';
@@ -226,9 +227,7 @@ function EditRestaurantContent() {
             ),
           }}
         />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading restaurant data...</Text>
-        </View>
+        <AppLoader />
       </SafeAreaView>
     );
   }
@@ -393,11 +392,7 @@ export default function EditRestaurantScreen() {
   }
 
   if (isLoading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text>Loading...</Text>
-      </SafeAreaView>
-    );
+    return <AppLoader />;
   }
 
   return (

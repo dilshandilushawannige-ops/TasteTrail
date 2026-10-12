@@ -7,6 +7,7 @@ import { router, Tabs } from 'expo-router';
 import { updateProfile } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
+import { AppLoader } from '@/components/AppLoader';
 import { RatingSummary } from '@/types/review';
 import { useEffect, useState } from 'react';
 import {
@@ -223,11 +224,7 @@ export default function ProfileScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#E8505B" />
-      </View>
-    );
+    return <AppLoader />;
   }
 
   if (!user) {

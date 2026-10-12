@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Image,
   Animated,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,9 @@ import { useNearbyRestaurants } from '@/hooks/useNearbyRestaurants';
 import { useSavedRestaurants } from '@/hooks/useSavedRestaurants';
 import { RESTAURANT_CATEGORIES } from '@/constants/restaurant';
 import type { Restaurant } from '@/services/restaurantService';
+import { DiscoverMap } from '@/components/DiscoverMap';
+import { POPULAR_CITIES, SRI_LANKAN_PROVINCES } from '@/constants/locations';
+import { searchPlaces, type PlaceResult } from '@/services/geocodingService';
 
 // Get category icon function (defined outside component for performance)
 const getCategoryIcon = (category: string): string => {
@@ -44,6 +48,10 @@ export default function DiscoverScreen() {
   const [lastTapTime, setLastTapTime] = useState<number>(0);
   const [toast, setToast] = useState('');
   const [categoryTransition] = useState(() => new Animated.Value(1));
+  const [locationSheetVisible, setLocationSheetVisible] = useState(false);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceResult[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const { isSaved, toggle } = useSavedRestaurants();
 
   const {
@@ -54,7 +62,25 @@ export default function DiscoverScreen() {
     setSortBy,
     setSearchText: setGlobalSearchText,
     setSelectedCategory: setGlobalSelectedCategory,
+    searchCenter,
+    userLocation,
+    setSearchCenter,
+    setLocationFilter,
+    locationFilter,
+    getCurrentLocation,
   } = useNearbyRestaurants();
+
+  React.useEffect(() => {
+    const query = locationQuery.trim();
+    if (!query) {
+      const timer = setTimeout(() => setPlaceSuggestions([]), 0);
+      return () => clearTimeout(timer);
+    }
+    const timer = setTimeout(() => {
+      void searchPlaces(query).then(setPlaceSuggestions);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [locationQuery]);
 
   // Create dynamic category chips from real restaurant categories
   const categoryChips = useMemo(() => {
@@ -126,20 +152,23 @@ export default function DiscoverScreen() {
           autoCorrect={false}
           numberOfLines={1}
         />
-        <View style={styles.locationChip}>
+        <TouchableOpacity style={styles.locationChip} onPress={() => setLocationSheetVisible(true)}>
           <Ionicons name="location" size={12} color="#E8505B" />
           <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
             {currentArea}
           </Text>
-          <Ionicons name="chevron-down" size={12} color="#666" />
-        </View>
+          {locationFilter ? (
+            <TouchableOpacity onPress={(event) => { event.stopPropagation(); setLocationFilter(null); }}>
+              <Ionicons name="close-circle" size={14} color="#666" />
+            </TouchableOpacity>
+          ) : <Ionicons name="chevron-down" size={12} color="#666" />}
+        </TouchableOpacity>
       </View>
       
       <TouchableOpacity 
         style={styles.filterButton}
         onPress={() => {
-          // Filter options would go here
-          console.log('Filter options');
+          // Search and category controls remain unchanged.
         }}
       >
         <Ionicons name="options" size={20} color="#FFF" />
@@ -181,58 +210,21 @@ export default function DiscoverScreen() {
       ))}
     </ScrollView>
   );
-  // Render static map card with overlays
+  // Render the map card while keeping the surrounding Discover layout unchanged.
   const renderMapCard = () => (
-    <View style={styles.mapCard}>
-      {/* Background map image or fallback */}
-      <View style={styles.mapBackground}>
-        {/* Fallback map design with shapes */}
-        <View style={styles.mapSea} />
-        <View style={styles.mapCoast1} />
-        <View style={styles.mapCoast2} />
-        <View style={styles.mapCoast3} />
-      </View>
-
-      {/* Top-left: Open kitchens pill */}
-      <View style={styles.openKitchensPill}>
-        <Ionicons name="flame" size={14} color="#E8505B" />
-        <Text style={styles.openKitchensText}>{openRestaurants.length} Hearth Kitchens Open</Text>
-      </View>
-
-      {/* Right column controls */}
-      <View style={styles.mapControls}>
-        <TouchableOpacity style={styles.mapControlButton}>
-          <Ionicons name="add" size={20} color="#333" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mapControlButton}>
-          <Ionicons name="remove" size={20} color="#333" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.targetButton}>
-          <Ionicons name="locate" size={20} color="#E8505B" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Restaurant markers with labels */}
-      {nearbyRestaurants.slice(0, 2).map((restaurant, index) => (
-        <View key={restaurant.id} style={[
-          styles.restaurantMarker,
-          index === 0 ? styles.marker1Position : styles.marker2Position
-        ]}>
-          <View style={styles.markerLabel}>
-            <Text style={styles.markerLabelText}>{restaurant.name}</Text>
-          </View>
-          <View style={[styles.markerCircle, { backgroundColor: index === 0 ? '#E8505B' : '#10B981' }]}>
-            <Ionicons name="restaurant" size={12} color="#FFF" />
-          </View>
-        </View>
-      ))}
-
-      {/* Bottom-left: Location pill */}
-      <View style={styles.locationPill}>
-        <View style={styles.greenDot} />
-        <Text style={styles.locationPillText}>You are near {currentArea}</Text>
-      </View>
-    </View>
+    <DiscoverMap
+      searchCenter={searchCenter}
+      userLocation={userLocation}
+      nearbyRestaurants={nearbyRestaurants}
+      openCount={openRestaurants.length}
+      currentArea={currentArea}
+      selectedRestaurant={selectedRestaurant}
+      onRestaurantSelect={setSelectedRestaurant}
+      onMyLocationPress={() => {
+        setLocationFilter(null);
+        void getCurrentLocation();
+      }}
+    />
   );
   // Render section header with dynamic sort
   const renderSectionHeader = () => (
@@ -396,10 +388,11 @@ export default function DiscoverScreen() {
             {nearbyRestaurants.length === 0 && (
               <View style={styles.noResultsContainer}>
                 <Ionicons name="restaurant-outline" size={48} color="#9CA3AF" />
-                <Text style={styles.noResultsTitle}>No restaurants found</Text>
+                <Text style={styles.noResultsTitle}>{locationFilter ? `No restaurants in ${locationFilter.name} yet` : 'No restaurants found'}</Text>
                 <Text style={styles.noResultsSubtitle}>
-                  Try adjusting your search or category filter
+                  {locationFilter ? 'Clear filter to see restaurants elsewhere.' : 'Try adjusting your search or category filter'}
                 </Text>
+                {locationFilter && <TouchableOpacity onPress={() => setLocationFilter(null)}><Text style={styles.clearLocationFilterText}>Clear filter</Text></TouchableOpacity>}
               </View>
             )}
           </ScrollView>
@@ -408,6 +401,73 @@ export default function DiscoverScreen() {
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
+      <Modal
+        visible={locationSheetVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setLocationSheetVisible(false)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <TouchableOpacity style={styles.sheetDismissArea} onPress={() => setLocationSheetVisible(false)} />
+          <View style={styles.locationSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Choose location</Text>
+            <TouchableOpacity
+              style={styles.currentLocationRow}
+              onPress={() => {
+                setLocationFilter(null);
+                setLocationSheetVisible(false);
+                void getCurrentLocation();
+              }}
+            >
+              <Ionicons name="locate" size={19} color="#E8505B" />
+              <Text style={styles.currentLocationLabel}>Use my current location</Text>
+            </TouchableOpacity>
+            <View style={styles.locationSearchBox}>
+              <Ionicons name="search" size={18} color="#9CA3AF" />
+              <TextInput
+                style={styles.locationSearchInput}
+                placeholder="Search a city or place"
+                placeholderTextColor="#9CA3AF"
+                value={locationQuery}
+                onChangeText={setLocationQuery}
+              />
+            </View>
+            {placeSuggestions.map((place) => (
+              <TouchableOpacity key={`${place.latitude}-${place.longitude}`} style={styles.suggestionRow} onPress={() => {
+                setSearchCenter(place);
+                setLocationFilter({ ...place, name: place.city || place.displayName.split(',')[0], type: 'city', zoom: 12 });
+                setLocationSheetVisible(false);
+                setLocationQuery('');
+              }}>
+                <Ionicons name="location-outline" size={17} color="#64748B" />
+                <Text style={styles.suggestionText} numberOfLines={1}>{place.displayName}</Text>
+              </TouchableOpacity>
+            ))}
+            <Text style={styles.locationSectionLabel}>Provinces</Text>
+            <View style={styles.locationChipGrid}>
+              {SRI_LANKAN_PROVINCES.map((choice) => (
+                <TouchableOpacity key={choice.name} style={styles.placeChip} onPress={() => { setSearchCenter(choice); setLocationFilter(choice); setLocationSheetVisible(false); }}>
+                  <Text style={styles.placeChipText}>{choice.name.replace(' Province', '')}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.locationSectionLabel}>Popular cities</Text>
+            <View style={styles.locationChipGrid}>
+              {POPULAR_CITIES.map((choice) => (
+                <TouchableOpacity key={choice.name} style={styles.placeChip} onPress={() => { setSearchCenter(choice); setLocationFilter(choice); setLocationSheetVisible(false); }}>
+                  <Text style={styles.placeChipText}>{choice.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {locationFilter && (
+              <TouchableOpacity style={styles.clearLocationFilter} onPress={() => { setLocationFilter(null); setLocationSheetVisible(false); }}>
+                <Text style={styles.clearLocationFilterText}>Clear filter</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
       {toast ? <View style={styles.toast}><Ionicons name="bookmark" size={15} color="#FFF" /><Text style={styles.toastText}>{toast}</Text></View> : null}
     </SafeAreaView>
   );
@@ -420,6 +480,23 @@ const styles = StyleSheet.create({
   },
   toast: { position: 'absolute', bottom: 24, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#1F2937', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10 },
   toastText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.28)', justifyContent: 'flex-end' },
+  sheetDismissArea: { flex: 1 },
+  locationSheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, maxHeight: '82%' },
+  sheetHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB', alignSelf: 'center', marginBottom: 12 },
+  sheetTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937', marginBottom: 14 },
+  currentLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  currentLocationLabel: { color: '#E8505B', fontWeight: '600', fontSize: 14 },
+  locationSearchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 12, marginVertical: 8 },
+  locationSearchInput: { flex: 1, height: 44, color: '#1F2937', fontSize: 14 },
+  suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9 },
+  suggestionText: { flex: 1, color: '#374151', fontSize: 13 },
+  locationSectionLabel: { color: '#64748B', fontSize: 12, fontWeight: '700', marginTop: 12, marginBottom: 7 },
+  locationChipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  placeChip: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 7 },
+  placeChipText: { color: '#334155', fontSize: 12 },
+  clearLocationFilter: { alignSelf: 'center', paddingVertical: 12 },
+  clearLocationFilterText: { color: '#E8505B', fontWeight: '700', fontSize: 13 },
   scrollView: {
     flex: 1,
   },

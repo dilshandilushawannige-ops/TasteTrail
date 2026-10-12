@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppLoader } from '@/components/AppLoader';
 
 import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { useRestaurantOperations } from '@/hooks/useRestaurantOperations';
@@ -286,11 +287,7 @@ export default function AddRestaurantScreen() {
   }
 
   if (isLoading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text>Loading...</Text>
-      </SafeAreaView>
-    );
+    return <AppLoader />;
   }
 
   return (
