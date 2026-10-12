@@ -20,6 +20,12 @@ import {
   View,
 } from 'react-native';
 
+type Ingredient = {
+  name: string;
+  amount: string;
+  unit: string;
+};
+
 /**
  * Add Recipe Screen
  * Allows users to add new traditional Sri Lankan recipes to Firestore
@@ -29,7 +35,9 @@ export default function AddRecipeScreen() {
   const recipeId = Array.isArray(params.recipeId) ? params.recipeId[0] : params.recipeId;
   const [category, setCategory] = useState('');
   const [recipeName, setRecipeName] = useState('');
-  const [ingredients, setIngredients] = useState('');
+  const [ingredients, setIngredients] = useState<Ingredient[]>([
+    { name: '', amount: '', unit: 'g' },
+  ]);
   const [steps, setSteps] = useState<string[]>(['']);
   const [creditPublicly, setCreditPublicly] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -89,7 +97,15 @@ export default function AddRecipeScreen() {
       const data = snapshot.data();
       setCategory(data.category || '');
       setRecipeName(data.name || '');
-      setIngredients(data.ingredients || '');
+      setIngredients(
+        Array.isArray(data.ingredients)
+          ? data.ingredients.map((item: Partial<Ingredient>) => ({
+              name: typeof item.name === 'string' ? item.name : '',
+              amount: typeof item.amount === 'string' ? item.amount : '',
+              unit: typeof item.unit === 'string' ? item.unit : 'g',
+            }))
+          : [{ name: typeof data.ingredients === 'string' ? data.ingredients : '', amount: '', unit: 'g' }],
+      );
       setSteps(Array.isArray(data.steps) && data.steps.length ? data.steps : ['']);
       setCreditPublicly(data.creditPublicly !== false);
       setExistingImageUrl(typeof data.imageUrl === 'string' ? data.imageUrl : null);
@@ -124,38 +140,39 @@ export default function AddRecipeScreen() {
   };
 
   /**
-   * Upload image to Cloudinary using base64 encoding
+   * Upload image to Cloudinary using a platform-compatible multipart payload
    */
   const uploadImageToCloudinary = async (uri: string): Promise<string | null> => {
     try {
       setUploadingImage(true);
 
-      // Read file as base64
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Prepare the data URL format required by Cloudinary
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const imageResponse = await fetch(uri);
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to read selected image (${imageResponse.status})`);
+        }
+        formData.append('file', await imageResponse.blob(), 'recipe-image.jpg');
+      } else {
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        formData.append('file', `data:image/jpeg;base64,${base64}`);
+      }
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
       // Upload to Cloudinary
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            file: dataUrl,
-            upload_preset: CLOUDINARY_UPLOAD_PRESET,
-          }),
+          body: formData,
         }
       );
 
       const data = await response.json();
 
-      if (data.secure_url) {
+      if (response.ok && data.secure_url) {
         return data.secure_url;
       } else {
         throw new Error(data.error?.message || 'Failed to get image URL from Cloudinary');
@@ -197,6 +214,21 @@ export default function AddRecipeScreen() {
     setSteps(newSteps);
   };
 
+  const updateIngredient = (index: number, field: keyof Ingredient, value: string) => {
+    setIngredients((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    )));
+  };
+
+  const addIngredient = () => {
+    setIngredients((current) => [...current, { name: '', amount: '', unit: 'g' }]);
+  };
+
+  const removeIngredient = (index: number) => {
+    if (ingredients.length === 1) return;
+    setIngredients((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   /**
    * Validate and save recipe to Firestore
    */
@@ -211,8 +243,13 @@ export default function AddRecipeScreen() {
       return;
     }
 
-    if (!ingredients.trim()) {
+    const filledIngredients = ingredients.filter((ingredient) => ingredient.name.trim() !== '');
+    if (filledIngredients.length === 0) {
       Alert.alert('Missing Information', 'Please enter the ingredients');
+      return;
+    }
+    if (filledIngredients.some((ingredient) => !ingredient.amount.trim() || !ingredient.unit.trim())) {
+      Alert.alert('Missing Information', 'Please add an amount and unit for every ingredient');
       return;
     }
 
@@ -237,7 +274,11 @@ export default function AddRecipeScreen() {
       const recipeData = {
         category,
         name: recipeName.trim(),
-        ingredients: ingredients.trim(),
+        ingredients: filledIngredients.map((ingredient) => ({
+          name: ingredient.name.trim(),
+          amount: ingredient.amount.trim(),
+          unit: ingredient.unit.trim(),
+        })),
         steps: filledSteps,
         imageUrl: imageUrl || existingImageUrl,
         creditPublicly,
@@ -262,7 +303,7 @@ export default function AddRecipeScreen() {
           onPress: () => {
             setCategory('');
             setRecipeName('');
-            setIngredients('');
+            setIngredients([{ name: '', amount: '', unit: 'g' }]);
             setSteps(['']);
             setImageUri(null);
             setExistingImageUrl(null);
@@ -389,25 +430,53 @@ export default function AddRecipeScreen() {
           <Text style={styles.label}>
             Ingredients <Text style={styles.required}>*</Text>
           </Text>
-          <View style={styles.inputWithIcon}>
-            <TextInput
-              style={[styles.inputFlex, styles.textArea]}
-              placeholder="Speak or type ingredients, e.g. 500g tuna, 2 sprigs curry leaves..."
-              placeholderTextColor="#CCC"
-              value={ingredients}
-              onChangeText={setIngredients}
-              multiline
-              numberOfLines={4}
-              editable={!loading}
-            />
-            <TouchableOpacity style={styles.micButton}>
-              <Ionicons name="mic" size={18} color="#E8505B" />
-            </TouchableOpacity>
-          </View>
+          {ingredients.map((ingredient, index) => (
+            <View key={index} style={styles.ingredientItem}>
+              <View style={styles.stepHeader}>
+                <Text style={styles.stepNumber}>Ingredient {index + 1}</Text>
+                {ingredients.length > 1 && (
+                  <TouchableOpacity onPress={() => removeIngredient(index)} disabled={loading}>
+                    <Ionicons name="trash-outline" size={19} color="#FF5252" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingredient name, e.g. Yellowfin tuna"
+                placeholderTextColor="#CCC"
+                value={ingredient.name}
+                onChangeText={(value) => updateIngredient(index, 'name', value)}
+                editable={!loading}
+              />
+              <View style={styles.ingredientAmountRow}>
+                <TextInput
+                  style={[styles.input, styles.ingredientAmountInput]}
+                  placeholder="Amount"
+                  placeholderTextColor="#CCC"
+                  value={ingredient.amount}
+                  onChangeText={(value) => updateIngredient(index, 'amount', value)}
+                  keyboardType="decimal-pad"
+                  editable={!loading}
+                />
+                <TextInput
+                  style={[styles.input, styles.ingredientUnitInput]}
+                  placeholder="Unit (g, kg, tsp)"
+                  placeholderTextColor="#CCC"
+                  value={ingredient.unit}
+                  onChangeText={(value) => updateIngredient(index, 'unit', value)}
+                  editable={!loading}
+                />
+              </View>
+            </View>
+          ))}
+          <TouchableOpacity style={styles.addStepButton} onPress={addIngredient} disabled={loading}>
+            <Ionicons name="add-circle-outline" size={24} color="#E8505B" />
+            <Text style={styles.addStepText}>Add ingredient</Text>
+          </TouchableOpacity>
           <View style={styles.infoRow}>
             <Ionicons name="checkmark-circle" size={14} color="#4CAF50" style={styles.infoIcon} />
             <Text style={styles.infoText}>
-              Just list what you use; measurements can be approximate.
+              Add an amount and unit, such as 500 g tuna or 2 tsp pepper.
             </Text>
           </View>
         </View>
@@ -471,7 +540,7 @@ export default function AddRecipeScreen() {
             disabled={loading || uploadingImage}
           >
             {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.selectedImage} />
+              <Image source={{ uri: imageUri }} style={styles.selectedImage} resizeMode="cover" />
             ) : (
               <View style={styles.imagePickerPlaceholder}>
                 <Ionicons name="camera" size={40} color="#E8505B" />

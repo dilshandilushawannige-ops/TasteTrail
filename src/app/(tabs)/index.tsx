@@ -23,7 +23,7 @@ interface Recipe {
   id: string;
   category?: string;
   name: string;
-  ingredients: string;
+  ingredients: string | { name: string; amount: string; unit: string }[];
   steps: string[];
   imageUrl?: string;
   createdByName: string;
@@ -31,6 +31,12 @@ interface Recipe {
   createdAt: any;
   likes: number;
   saves: number;
+}
+
+function ingredientSearchText(ingredients: Recipe['ingredients']) {
+  return typeof ingredients === 'string'
+    ? ingredients
+    : ingredients.map((ingredient) => `${ingredient.name} ${ingredient.amount} ${ingredient.unit}`).join(' ');
 }
 
 function timestampMillis(value: unknown): number {
@@ -167,7 +173,7 @@ export default function HomeScreen() {
     const matchesSearch =
       searchQuery === '' ||
       recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      recipe.ingredients.toLowerCase().includes(searchQuery.toLowerCase());
+      ingredientSearchText(recipe.ingredients).toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -189,6 +195,9 @@ export default function HomeScreen() {
       .sort((a, b) => b.score - a.score)[0]?.recipe;
   })();
   const recentRecipes = filteredRecipes.slice(0, 6);
+  const openRecipeDetails = (recipeId: string) => {
+    router.push({ pathname: '/recipe/[id]', params: { id: recipeId } } as never);
+  };
 
   if (loading) {
     return (
@@ -242,7 +251,7 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={styles.trendingCard}
-            onPress={() => router.push({ pathname: '/cooking', params: { recipeId: trendingRecipe.id } })}
+            onPress={() => openRecipeDetails(trendingRecipe.id)}
           >
             {trendingRecipe.imageUrl ? (
               <Image source={{ uri: trendingRecipe.imageUrl }} style={styles.trendingImage} />
@@ -276,17 +285,12 @@ export default function HomeScreen() {
               />
             </TouchableOpacity>
 
-            <View style={styles.timeOverlayBottom}>
-              <Ionicons name="time-outline" size={14} color="#FFF" />
-              <Text style={styles.timeText}>45 Mins</Text>
-            </View>
-
             <View style={styles.trendingContent}>
               <Text style={styles.trendingTitle} numberOfLines={2}>
                 {trendingRecipe.name}
               </Text>
               <Text style={styles.trendingDescription} numberOfLines={2}>
-                {trendingRecipe.ingredients}
+                {ingredientSearchText(trendingRecipe.ingredients)}
               </Text>
 
               <View style={styles.trendingFooter}>
@@ -296,10 +300,6 @@ export default function HomeScreen() {
                     <Text style={styles.authorName}>By {trendingRecipe.createdByName}</Text>
                     <Text style={styles.authorLocation}>Ambalangoda Heritage</Text>
                   </View>
-                </View>
-
-                <View style={styles.categoryTag}>
-                  <Text style={styles.categoryTagText}>Traditional</Text>
                 </View>
               </View>
             </View>
@@ -362,7 +362,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={recipe.id}
                 style={styles.categoryCard}
-                onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+                onPress={() => openRecipeDetails(recipe.id)}
               >
                 {recipe.imageUrl ? (
                   <Image source={{ uri: recipe.imageUrl }} style={styles.categoryCardImage} />
@@ -406,7 +406,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={recipe.id}
               style={styles.recentCard}
-              onPress={() => router.push({ pathname: '/cooking', params: { recipeId: recipe.id } })}
+              onPress={() => openRecipeDetails(recipe.id)}
             >
               {recipe.imageUrl ? (
                 <Image source={{ uri: recipe.imageUrl }} style={styles.recentImage} />
@@ -631,23 +631,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  timeOverlayBottom: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 4,
-  },
-  timeText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   trendingContent: {
     padding: 16,
   },
@@ -693,20 +676,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
   },
-  categoryTag: {
-    backgroundColor: '#FFF5F5',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E8505B',
-  },
-  categoryTagText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#E8505B',
-  },
-
   // Categories
   categoriesScroll: {
     marginBottom: 16,

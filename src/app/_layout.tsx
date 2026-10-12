@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
@@ -36,8 +36,9 @@ export default function RootLayout() {
       setClaimsLoading(true);
       setClaimsError(null);
       
-      // Refresh token to get latest claims
-      await currentUser.getIdToken(true);
+      // Read the current token without forcing a network refresh. Forcing a
+      // refresh on every auth-state event can exhaust Firebase Auth quota
+      // during Expo reloads and Fast Refresh.
       const idTokenResult = await currentUser.getIdTokenResult();
       const claims = idTokenResult.claims as AdminClaims;
       
@@ -94,7 +95,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
     const inAdminGroup = segments[0] === 'admin';
     const inTabsGroup = segments[0] === '(tabs)';
-    const inAllowedRoute = segments[0] === 'cooking' || segments[0] === 'explore' || segments[0] === 'restaurant' || inTabsGroup;
+    const inAllowedRoute = segments[0] === 'cooking' || segments[0] === 'explore' || segments[0] === 'recipe' || segments[0] === 'restaurant' || inTabsGroup;
 
     if (!user && !inAuthGroup) {
       // User is not logged in and not on auth screens, redirect to login
@@ -156,7 +157,17 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      <AccountBlockGate><Slot /></AccountBlockGate>
+      <AccountBlockGate>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            animationDuration: 280,
+            animationMatchesGesture: true,
+            gestureEnabled: true,
+          }}
+        />
+      </AccountBlockGate>
     </ThemeProvider>
   );
 }
