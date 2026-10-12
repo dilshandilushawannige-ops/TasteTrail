@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "TasteTrail",
+    "name": "Taste Trail",
     "slug": "TasteTrail",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tastetrail",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#E8505B",
     "ios": {
       "icon": "./assets/expo.icon",
       "infoPlist": {
@@ -16,8 +17,9 @@
       }
     },
     "android": {
+      "backgroundColor": "#E8505B",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#E8505B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -39,9 +41,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#E8505B",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 288,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#E8505B",
+            "image": "./assets/images/splash-icon.png"
+          }
         }
       ],
       [
@@ -60,6 +67,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "29d87eb0-6990-4be3-961d-200217c6c883"
+      }
     }
   }
 }

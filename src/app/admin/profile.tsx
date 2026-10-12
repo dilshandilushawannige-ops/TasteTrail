@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CLOUDINARY_CONFIG } from '@/config/cloudinary';
 import AnnouncementManager from '@/components/admin/AnnouncementManager';
+import { AppLoader } from '@/components/AppLoader';
 import { auth, db } from '@/firebaseConfig';
 
 interface AdminProfile {
@@ -192,12 +193,7 @@ export default function AdminProfileScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E8505B" />
-        <Text style={styles.loadingText}>Loading profile...</Text>
-      </View>
-    );
+    return <AppLoader />;
   }
 
   if (!user || !profile) {

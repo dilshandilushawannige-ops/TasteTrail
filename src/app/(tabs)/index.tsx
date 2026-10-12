@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Image,
   RefreshControl,
@@ -18,6 +17,8 @@ import {
 import { useSavedRecipes } from '@/hooks/useSavedRecipes';
 import { RatingSummary } from '@/types/review';
 import { subscribeToRecipeRatingSummaries } from '@/services/reviewService';
+import { AppLoader } from '@/components/AppLoader';
+import { formatIngredients } from '@/utils/formatIngredients';
 
 interface Recipe {
   id: string;
@@ -192,9 +193,7 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#E8505B" />
-      </View>
+      <AppLoader />
     );
   }
 
@@ -286,7 +285,7 @@ export default function HomeScreen() {
                 {trendingRecipe.name}
               </Text>
               <Text style={styles.trendingDescription} numberOfLines={2}>
-                {trendingRecipe.ingredients}
+                {formatIngredients(trendingRecipe.ingredients)}
               </Text>
 
               <View style={styles.trendingFooter}>

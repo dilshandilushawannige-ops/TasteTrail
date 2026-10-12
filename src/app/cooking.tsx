@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
 import { WriteReviewSheet } from '@/components/reviews/WriteReviewSheet';
 import { useRecipeReviews } from '@/hooks/useRecipeReviews';
+import { formatIngredients } from '@/utils/formatIngredients';
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
@@ -428,7 +429,7 @@ function CookingContent({ recipeId }: { recipeId?: string }) {
           {tab === 'ingredients' ? (
             <View style={styles.card}>
               <Text style={styles.heading}>Ingredients</Text>
-              <Text style={styles.text}>{recipe.ingredients || 'No ingredient list was provided.'}</Text>
+              <Text style={styles.text}>{formatIngredients(recipe.ingredients) || 'No ingredient list was provided.'}</Text>
               <View style={styles.row}>
                 <Button title="Read ingredients aloud" secondary onPress={readAloud} disabled={busy || !recipe.ingredients} />
                 <Button title="Stop voice" secondary onPress={stopVoice} />

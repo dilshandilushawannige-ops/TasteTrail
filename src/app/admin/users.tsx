@@ -7,6 +7,7 @@ import { collection, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppLoader } from '@/components/AppLoader';
 
 interface SignupUser {
   id: string;
@@ -76,7 +77,7 @@ export default function AdminUsersScreen() {
       }
 
       // Check claims before reading the collection, including locally cached records.
-      void user.getIdTokenResult(true).then(({ claims }) => {
+      void user.getIdTokenResult().then(({ claims }) => {
         if (generation !== currentGeneration) return;
         const isAdmin = claims.admin === true || claims.admin === 'true'
           || claims.isAdmin === true || claims.role === 'admin'
@@ -248,7 +249,7 @@ export default function AdminUsersScreen() {
         </TouchableOpacity>
       </View>}
       {loading ? (
-        <View style={styles.state}><ActivityIndicator size="large" color="#E8505B" /><Text style={styles.stateText}>Loading users...</Text></View>
+        <AppLoader />
       ) : error ? (
         <View style={styles.state}>
           <Ionicons name="alert-circle-outline" size={40} color="#E8505B" />

@@ -5,9 +5,11 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import React, { useState } from 'react';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Switch,
@@ -21,6 +23,175 @@ import { useRestaurantFormContext } from '@/contexts/RestaurantFormContext';
 import { TimeInput } from '@/components/restaurant/TimeInput';
 import { useCurrentLocation } from '@/hooks/useCurrentLocation';
 import { reverseGeocode, Coordinates, validateCoordinates } from '@/utils/location';
+import { searchPlaces } from '@/services/geocodingService';
+import { DEFAULT_MAP_CENTER, MAP_STYLE_URL, OPEN_STREET_MAP_RASTER_STYLE } from '@/constants/map';
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+function AdminLocationMap({ coordinates, onChange, setScrollEnabled }: {
+  coordinates?: Coordinates;
+  onChange: (coordinates: Coordinates) => void;
+  setScrollEnabled: (enabled: boolean) => void;
+}) {
+  const [mapModule, setMapModule] = React.useState<any>(null);
+  const [query, setQuery] = React.useState('');
+  const [suggestions, setSuggestions] = React.useState<Awaited<ReturnType<typeof searchPlaces>>>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [searchAttempted, setSearchAttempted] = React.useState(false);
+  const [styleFailed, setStyleFailed] = React.useState(false);
+  const cameraRef = React.useRef<any>(null);
+  const regionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ignoreCameraUntil = useRef(0);
+  const [camera, setCamera] = useState({
+    center: [coordinates?.longitude ?? DEFAULT_MAP_CENTER.longitude, coordinates?.latitude ?? DEFAULT_MAP_CENTER.latitude] as [number, number],
+    zoom: coordinates ? 16 : 11,
+  });
+
+  React.useEffect(() => {
+    if (!isExpoGo) {
+      const timer = setTimeout(() => {
+        try {
+          setMapModule(require('@maplibre/maplibre-react-native'));
+        } catch {
+          setMapModule(null);
+        }
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, []);
+
+  const moveTo = React.useCallback((next: Coordinates) => {
+    const rounded = { latitude: Number(next.latitude.toFixed(6)), longitude: Number(next.longitude.toFixed(6)) };
+    ignoreCameraUntil.current = Date.now() + 900;
+    onChange(rounded);
+    setCamera({ center: [rounded.longitude, rounded.latitude], zoom: 16 });
+    cameraRef.current?.easeTo({ center: [rounded.longitude, rounded.latitude], zoom: 16, duration: 500 });
+  }, [onChange]);
+
+  React.useEffect(() => {
+    if (!coordinates) return;
+    const nextCenter: [number, number] = [coordinates.longitude, coordinates.latitude];
+    if (camera.center[0] !== nextCenter[0] || camera.center[1] !== nextCenter[1]) {
+      ignoreCameraUntil.current = Date.now() + 900;
+      setCamera({ center: nextCenter, zoom: 16 });
+      cameraRef.current?.easeTo({ center: nextCenter, zoom: 16, duration: 500 });
+    }
+  }, [coordinates, camera.center]);
+
+  React.useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) {
+      const timer = setTimeout(() => setSuggestions([]), 0);
+      return () => clearTimeout(timer);
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      const results = await searchPlaces(trimmed);
+      setSuggestions(results);
+      setSearchAttempted(true);
+      setIsSearching(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  React.useEffect(() => () => {
+    if (regionTimer.current) clearTimeout(regionTimer.current);
+  }, []);
+
+  const searchNow = async () => {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) return;
+    setIsSearching(true);
+    const results = await searchPlaces(trimmed);
+    setSuggestions(results);
+    setSearchAttempted(true);
+    setIsSearching(false);
+  };
+
+  const handleRegionDidChange = (event: any) => {
+    const viewState = event.nativeEvent;
+    if (!viewState?.userInteraction || Date.now() < ignoreCameraUntil.current) return;
+    const centerPoint = viewState.center;
+    if (!Array.isArray(centerPoint)) return;
+    if (regionTimer.current) clearTimeout(regionTimer.current);
+    regionTimer.current = setTimeout(() => {
+      const [longitude, latitude] = centerPoint;
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        onChange({ latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)) });
+      }
+    }, 300);
+  };
+
+  if (isExpoGo) {
+    return <Text style={styles.mapBuildNote}>Map picker available in the development build.</Text>;
+  }
+  if (!mapModule) return <View style={styles.adminMapLoading}><Text style={styles.mapBuildNote}>Loading map...</Text></View>;
+  const Map = mapModule.Map;
+  const Camera = mapModule.Camera;
+  return (
+    <View
+      style={styles.adminMapContainer}
+      onTouchStart={() => setScrollEnabled(false)}
+      onTouchEnd={() => setScrollEnabled(true)}
+      onTouchCancel={() => setScrollEnabled(true)}
+    >
+      <Map
+        style={styles.adminMap}
+        mapStyle={styleFailed ? OPEN_STREET_MAP_RASTER_STYLE : MAP_STYLE_URL}
+        attribution
+        logoEnabled={false}
+        onPress={(event: any) => {
+          const point = event.nativeEvent?.lngLat || event.lngLat;
+          const [longitude, latitude] = Array.isArray(point) ? point : [point?.longitude, point?.latitude];
+          if (Number.isFinite(latitude) && Number.isFinite(longitude)) moveTo({ latitude, longitude });
+        }}
+        onRegionDidChange={handleRegionDidChange}
+        onDidFailLoadingMap={() => setStyleFailed(true)}
+      >
+        <Camera ref={cameraRef} center={camera.center} zoom={camera.zoom} />
+      </Map>
+      <View pointerEvents="none" style={styles.centerPin}><Ionicons name="location" size={42} color="#E8505B" /></View>
+      <View pointerEvents="box-none" style={styles.adminMapOverlays}>
+        <View style={styles.adminMapSearch}>
+        <Ionicons name="search" size={16} color="#64748B" />
+        <TextInput
+          style={styles.adminMapSearchInput}
+          placeholder="Search address or place"
+          placeholderTextColor="#94A3B8"
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={() => { void searchNow(); }}
+          returnKeyType="search"
+        />
+        {isSearching && <Text style={styles.searchingText}>...</Text>}
+        </View>
+        {suggestions.length > 0 && (
+          <View style={styles.suggestions}>
+            {suggestions.slice(0, 6).map((place) => (
+              <TouchableOpacity key={`${place.latitude}:${place.longitude}`} style={styles.suggestion} onPress={() => {
+                moveTo(place);
+                setQuery(place.displayName);
+                setSuggestions([]);
+                Keyboard.dismiss();
+              }}>
+                <Text numberOfLines={1} style={styles.suggestionText}>{place.displayName}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {searchAttempted && !isSearching && suggestions.length === 0 && query.trim().length >= 3 && (
+          <View style={styles.noResults}>
+            <Text style={styles.suggestionText}>No results. Try a nearby town name</Text>
+            <TouchableOpacity onPress={() => { void searchNow(); }}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
 
 /**
  * Location & Contact Step Component (Step 2 of 2)
@@ -33,6 +204,7 @@ export function LocationContactStep() {
   } = useRestaurantFormContext();
 
   const [isGeocodingLocation, setIsGeocodingLocation] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   const { getCurrentLocationAsync, isLoading: isLoadingLocation } = useCurrentLocation();
 
   const handleCurrentLocationPress = async () => {
@@ -76,8 +248,7 @@ export function LocationContactStep() {
           }
         }
       }
-    } catch (error) {
-      console.error('Error getting current location:', error);
+    } catch {
     }
   };
 
@@ -94,7 +265,8 @@ export function LocationContactStep() {
     
     try {
       const fullAddress = `${address}, ${city}, Sri Lanka`;
-      const geocodeResult = await Location.geocodeAsync(fullAddress);
+      const places = await searchPlaces(fullAddress);
+      const geocodeResult = places[0] ? [places[0]] : [];
       
       if (geocodeResult && geocodeResult.length > 0) {
         const { latitude, longitude } = geocodeResult[0];
@@ -113,13 +285,9 @@ export function LocationContactStep() {
           );
         }
       } else {
-        Alert.alert(
-          'Location Not Found',
-          'Could not find coordinates for this address. Please check the spelling and try again.'
-        );
+        Alert.alert('Location Not Found', 'Could not find this address. Try a nearby town or drop the pin on the map.');
       }
-    } catch (error) {
-      console.error('Geocoding error:', error);
+    } catch {
       Alert.alert(
         'Geocoding Error',
         'Failed to find location. Please check your internet connection and try again.'
@@ -213,7 +381,11 @@ export function LocationContactStep() {
       <Text style={styles.fieldHint}>
         Set your restaurant&apos;s exact location coordinates
       </Text>
-      
+      <AdminLocationMap
+        coordinates={formData.coordinates}
+        onChange={(coordinates) => updateField('coordinates', coordinates)}
+        setScrollEnabled={setScrollEnabled}
+      />
       {/* Coordinates Preview */}
       {renderCoordinatesPreview()}
 
@@ -363,7 +535,7 @@ export function LocationContactStep() {
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} scrollEnabled={scrollEnabled} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       {renderLocationSection()}
       {renderAddressField()}
       {renderCityField()}
@@ -428,6 +600,66 @@ const styles = StyleSheet.create({
     color: '#999',
     marginBottom: 8,
   },
+  adminMapContainer: {
+    height: 240,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginBottom: 12,
+    position: 'relative',
+  },
+  adminMap: { flex: 1 },
+  adminMapLoading: {
+    height: 240,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  mapBuildNote: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginVertical: 12,
+  },
+  centerPin: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -20,
+    marginTop: -40,
+  },
+  adminMapSearch: {
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 11,
+    elevation: 3,
+  },
+  adminMapOverlays: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+  },
+  searchingText: { color: '#64748B', fontSize: 12 },
+  suggestions: {
+    marginTop: 6,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+    overflow: 'hidden',
+    elevation: 4,
+  },
+  suggestion: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  suggestionText: { color: '#1F2937', fontSize: 12 },
+  noResults: { marginTop: 6, padding: 12, borderRadius: 12, backgroundColor: '#FFF', elevation: 4 },
+  retryText: { marginTop: 6, color: '#E8505B', fontWeight: '600', fontSize: 12 },
+  adminMapSearchInput: { flex: 1, color: '#1F2937', fontSize: 13 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',

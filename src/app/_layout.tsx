@@ -2,9 +2,9 @@ import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } 
 import * as SplashScreen from 'expo-splash-screen';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { AppLoader } from '@/components/AppLoader';
 import AccountBlockGate from '@/components/AccountBlockGate';
 import { auth } from '@/firebaseConfig';
 
@@ -29,15 +29,41 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const appLoading = initializing || claimsLoading;
+
+  useEffect(() => {
+    if (!appLoading) {
+      try {
+        SplashScreen.setOptions({ fade: true, duration: 200 });
+      } catch {
+        // Older native clients may not expose splash options.
+      }
+      void SplashScreen.hideAsync();
+    }
+  }, [appLoading]);
+
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      try {
+        SplashScreen.setOptions({ fade: true, duration: 200 });
+      } catch {
+        // Older native clients may not expose splash options.
+      }
+      void SplashScreen.hideAsync();
+    }, 5000);
+    return () => clearTimeout(safetyTimer);
+  }, []);
 
   // Check admin claims
-  const checkAdminClaims = async (currentUser: User) => {
+  const checkAdminClaims = async (currentUser: User, forceRefresh = false) => {
     try {
       setClaimsLoading(true);
       setClaimsError(null);
       
-      // Refresh token to get latest claims
-      await currentUser.getIdToken(true);
+      // Use the cached token during normal auth checks to avoid repeated Auth requests.
+      if (forceRefresh) {
+        await currentUser.getIdToken(true);
+      }
       const idTokenResult = await currentUser.getIdTokenResult();
       const claims = idTokenResult.claims as AdminClaims;
       
@@ -61,7 +87,7 @@ export default function RootLayout() {
   // Retry claims check
   const retryClaimsCheck = () => {
     if (user) {
-      checkAdminClaims(user);
+      checkAdminClaims(user, true);
     }
   };
 
@@ -119,18 +145,6 @@ export default function RootLayout() {
     }
   }, [user, segments, initializing, isAdmin, claimsLoading]);
 
-  // Show loading screen while checking authentication state and claims
-  if (initializing || claimsLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E8505B" />
-        {claimsLoading && (
-          <Text style={styles.loadingText}>Verifying permissions...</Text>
-        )}
-      </View>
-    );
-  }
-
   // Show error screen if claims check failed for logged in user
   if (user && claimsError) {
     return (
@@ -155,23 +169,21 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AccountBlockGate><Slot /></AccountBlockGate>
+      <View style={[styles.root, !appLoading && styles.appReady]}>
+        <AccountBlockGate><Slot /></AccountBlockGate>
+        <AppLoader loading={appLoading} />
+      </View>
     </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
+  root: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FAFAF7',
+    backgroundColor: '#FFFFFF',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
+  appReady: {
+    backgroundColor: '#FFFFFF',
   },
   errorContainer: {
     flex: 1,

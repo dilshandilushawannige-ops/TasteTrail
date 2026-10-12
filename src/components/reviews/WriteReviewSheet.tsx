@@ -8,9 +8,9 @@ import { CreateReviewData } from '@/types/review';
 import { uploadReviewMedia } from '@/services/reviewMediaService';
 import type { Review, ReviewMedia } from '@/types/review';
 
-export interface ReviewFormData extends CreateReviewData {
-  diningType: string;
-  mealTime: string;
+export interface ReviewFormData extends Omit<CreateReviewData, 'diningType' | 'visitedWith' | 'mealTime' | 'wouldMakeAgain'> {
+  diningType?: string;
+  mealTime?: string;
   visitedWith?: string;
   wouldMakeAgain?: 'Yes' | 'Maybe' | 'No';
   anonymous: boolean;
@@ -95,7 +95,18 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, rec
         }
       }
       const uploadedMedia = media.map(asset => uploadedMediaRef.current.get(asset.uri)!);
-      await onSubmit({ ...(recipeId ? { recipeId } : { restaurantId: restaurantId! }), userId: user.uid, userName: anonymous ? 'Anonymous' : user.displayName || 'TasteTrail member', rating, comment: comment.trim(), ...(recipeId ? { mealTime, wouldMakeAgain } : { diningType, mealTime, visitedWith }), anonymous, media: uploadedMedia });
+      const commonReviewFields = {
+        userId: user.uid,
+        userName: anonymous ? 'Anonymous' : user.displayName || 'TasteTrail member',
+        rating,
+        comment: comment.trim(),
+        anonymous,
+        media: uploadedMedia,
+      };
+      const reviewData: ReviewFormData = recipeId
+        ? { ...commonReviewFields, recipeId, mealTime, wouldMakeAgain }
+        : { ...commonReviewFields, restaurantId: restaurantId!, diningType, mealTime, visitedWith };
+      await onSubmit(reviewData);
       uploadedMediaRef.current.clear();
       setRating(0); setComment(''); setMedia([]); setAnonymous(false);
       showFeedback(initialReview ? 'Review updated' : 'Review submitted', 'Thank you for sharing your experience!');
@@ -103,11 +114,13 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, rec
     } catch (error) { showFeedback(initialReview ? 'Unable to update' : 'Unable to submit', error instanceof Error ? error.message : 'Your draft is still here. Please try again.'); }
     finally { submittingRef.current = false; setSubmitting(false); }
   };
-  const choices = (label: string, options: string[], value: string, select: (value: string) => void) => (
+  function choices<T extends string>(label: string, options: readonly T[], value: T, onChange: (v: T) => void) {
+    return (
     <View style={styles.choiceGroup}><Text style={[styles.label, styles.choiceLabel]}>{label}</Text><View style={styles.choices}>
-      {options.map(option => <TouchableOpacity key={option} disabled={submitting} onPress={() => select(option)} accessibilityRole="radio" accessibilityState={{ checked: value === option }} style={[styles.chip, value === option && styles.selectedChip]}><Text style={[styles.chipText, value === option && styles.selectedChipText]}>{option}</Text></TouchableOpacity>)}
+      {options.map(option => <TouchableOpacity key={option} disabled={submitting} onPress={() => onChange(option)} accessibilityRole="radio" accessibilityState={{ checked: value === option }} style={[styles.chip, value === option && styles.selectedChip]}><Text style={[styles.chipText, value === option && styles.selectedChipText]}>{option}</Text></TouchableOpacity>)}
     </View></View>
-  );
+    );
+  }
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!submitting && !picking) onClose(); }}>
       <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -131,11 +144,11 @@ export function WriteReviewSheet({ visible, onClose, onSubmit, restaurantId, rec
             </View><Text style={styles.ratingText}>{rating ? `${rating.toFixed(1)} - ${ratingLabels[rating]}` : ratingLabels[0]}</Text><Text style={styles.ratingHint}>{rating ? 'Share what stood out during your visit.' : 'Tap a star to rate your experience.'}</Text>
           </View>
           <View style={styles.card}>
-            {targetLabel !== 'recipe' && choices('DINING TYPE', ['Dine-in', 'Takeaway', 'Delivery'], diningType, setDiningType)}
-            {choices('MEAL TIME', ['Breakfast', 'Lunch', 'Dinner'], mealTime, setMealTime)}
+            {targetLabel !== 'recipe' && choices('DINING TYPE', ['Dine-in', 'Takeaway', 'Delivery'] as const, diningType, setDiningType)}
+            {choices('MEAL TIME', ['Breakfast', 'Lunch', 'Dinner'] as const, mealTime, setMealTime)}
             {targetLabel === 'recipe'
-              ? choices('WOULD YOU MAKE THIS AGAIN?', ['Yes', 'Maybe', 'No'], wouldMakeAgain, setWouldMakeAgain)
-              : choices('VISITED WITH', ['Solo', 'Couple', 'Family', 'Friends'], visitedWith, setVisitedWith)}
+              ? choices('WOULD YOU MAKE THIS AGAIN?', ['Yes', 'Maybe', 'No'] as const, wouldMakeAgain, setWouldMakeAgain)
+              : choices('VISITED WITH', ['Solo', 'Couple', 'Family', 'Friends'] as const, visitedWith, setVisitedWith)}
           </View>
           <View style={styles.card}>
             <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your Review</Text><Text style={styles.count}>{comment.length}/{MAX_CHARACTERS}</Text></View>
