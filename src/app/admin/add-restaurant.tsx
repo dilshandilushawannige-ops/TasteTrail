@@ -23,6 +23,27 @@ import { RestaurantFormProvider, useRestaurantFormContext } from '@/contexts/Res
 import { RestaurantDetailsStep } from '@/components/restaurant/RestaurantDetailsStep';
 import { LocationContactStep } from '@/components/restaurant/LocationContactStep';
 
+function getSaveErrorMessage(error: unknown): string {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : 'unknown';
+  const message = error instanceof Error ? error.message : String(error);
+  const step = error instanceof Error && 'step' in error ? String(error.step) : 'saving restaurant';
+
+  let reason = message;
+  if (code === 'permission-denied') {
+    reason = "No admin permission, or Firestore rules for 'restaurants' are not published.";
+  } else if (code === 'unavailable' || /network|offline|timed out/i.test(message)) {
+    reason = 'No internet connection';
+  } else if (code === 'invalid-argument' && /undefined/i.test(message)) {
+    reason = `Unsupported undefined value: ${message}`;
+  } else if (step === 'uploading images') {
+    reason = `Image upload failed: ${message}`;
+  }
+
+  return `Failed while ${step}: ${reason} (${code})`;
+}
+
 /**
  * Add Restaurant Screen with multi-step form
  */
@@ -108,13 +129,7 @@ function AddRestaurantContent() {
       router.replace('/admin/restaurants');
     } catch (error) {
       console.error('Error saving draft:', error);
-      Alert.alert(
-        'Error', 
-        'Failed to save restaurant. Please try again.',
-        [
-          { text: 'OK' }
-        ]
-      );
+      Alert.alert('Error', getSaveErrorMessage(error), [{ text: 'OK' }]);
     }
   };
 
@@ -146,14 +161,10 @@ function AddRestaurantContent() {
       router.replace('/admin/restaurants');
     } catch (error) {
       console.error('Error publishing restaurant:', error);
-      Alert.alert(
-        'Error', 
-        'Failed to publish restaurant. Please try again.',
-        [
-          { text: 'Retry', onPress: handlePublish },
-          { text: 'Cancel' }
-        ]
-      );
+      Alert.alert('Error', getSaveErrorMessage(error), [
+        { text: 'Retry', onPress: handlePublish },
+        { text: 'Cancel' },
+      ]);
     }
   };
 

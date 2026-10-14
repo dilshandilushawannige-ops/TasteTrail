@@ -18,6 +18,27 @@ import { uploadImageToCloudinary, uploadMultipleImages } from '@/services/imageU
 import { CLOUDINARY_CONFIG } from '@/config/cloudinary';
 import type { RestaurantFormData } from '@/types/restaurant';
 
+class RestaurantSaveError extends Error {
+  constructor(
+    readonly step: 'uploading images' | 'saving to Firestore',
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RestaurantSaveError';
+  }
+}
+
+function getErrorCode(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : 'unknown';
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export interface UploadProgress {
   coverPhoto: number;
   additionalPhotos: { [index: number]: number };
@@ -54,39 +75,31 @@ export function useRestaurantOperations(): UseRestaurantOperationsResult {
     resetProgress();
 
     try {
-      // Upload cover photo if needed
-      let coverPhotoUrl = formData.coverPhotoUrl;
-      if (formData.coverPhotoUri && !formData.coverPhotoUri.startsWith('http')) {
-        const result = await uploadImageToCloudinary(
-          formData.coverPhotoUri,
-          { folder: CLOUDINARY_CONFIG.folders.restaurants },
-          (progress) => {
-            setUploadProgress(prev => ({ ...prev, coverPhoto: progress.percentage }));
-          }
-        );
-        coverPhotoUrl = result.url;
-      }
-
-      // Upload additional photos if needed
+      let coverPhotoUrl = formData.coverPhotoUrl || '';
       let additionalPhotoUrls = [...(formData.additionalPhotosUrls || [])];
-      if (formData.additionalPhotosUris && formData.additionalPhotosUris.length > 0) {
-        const newPhotos = formData.additionalPhotosUris.filter(uri => !uri.startsWith('http'));
+      try {
+        if (formData.coverPhotoUri && !formData.coverPhotoUri.startsWith('http')) {
+          const result = await uploadImageToCloudinary(
+            formData.coverPhotoUri,
+            { folder: CLOUDINARY_CONFIG.folders.restaurants },
+            (progress) => setUploadProgress(prev => ({ ...prev, coverPhoto: progress.percentage })),
+          );
+          coverPhotoUrl = result.url;
+        }
+        const newPhotos = (formData.additionalPhotosUris || []).filter(uri => !uri.startsWith('http'));
         if (newPhotos.length > 0) {
           const results = await uploadMultipleImages(
             newPhotos,
             { folder: CLOUDINARY_CONFIG.folders.restaurants },
-            (index, progress) => {
-              setUploadProgress(prev => ({
-                ...prev,
-                additionalPhotos: { ...prev.additionalPhotos, [index]: progress.percentage }
-              }));
-            }
+            (index, progress) => setUploadProgress(prev => ({
+              ...prev,
+              additionalPhotos: { ...prev.additionalPhotos, [index]: progress.percentage },
+            })),
           );
-          additionalPhotoUrls = [
-            ...additionalPhotoUrls,
-            ...results.map(result => result.url)
-          ];
+          additionalPhotoUrls = [...additionalPhotoUrls, ...results.map(result => result.url)];
         }
+      } catch (error) {
+        throw new RestaurantSaveError('uploading images', getErrorCode(error), getErrorMessage(error));
       }
 
       // Prepare restaurant data for Firestore
@@ -114,11 +127,21 @@ export function useRestaurantOperations(): UseRestaurantOperationsResult {
         createdBy: user.uid,
       };
 
-      const restaurantId = await createRestaurant(restaurantData);
+      let restaurantId: string;
+      try {
+        restaurantId = await createRestaurant(restaurantData);
+      } catch (error) {
+        throw new RestaurantSaveError('saving to Firestore', getErrorCode(error), getErrorMessage(error));
+      }
       return restaurantId;
 
     } catch (error) {
-      console.error('Error saving restaurant:', error);
+      console.error('Error saving restaurant:', {
+        step: error instanceof RestaurantSaveError ? error.step : 'preparing restaurant',
+        code: getErrorCode(error),
+        message: getErrorMessage(error),
+        error,
+      });
       throw error;
     } finally {
       setIsSubmitting(false);

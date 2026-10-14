@@ -12,13 +12,13 @@ service cloud.firestore {
     
     // Helper function to check if user is admin
     function isAdmin() {
-      // Check multiple possible admin claim structures
       return request.auth != null && (
-        request.auth.token.admin == true ||
-        request.auth.token.isAdmin == true ||
-        request.auth.token.role == 'admin' ||
-        ('admin' in request.auth.token.roles) ||
-        (resource != null && request.auth.uid == resource.data.createdBy)
+        request.auth.token.get('admin', false) == true ||
+        request.auth.token.get('admin', false) == 'true' ||
+        request.auth.token.get('isAdmin', false) == true ||
+        request.auth.token.get('role', '') == 'admin' ||
+        (request.auth.token.get('roles', []) is list &&
+          request.auth.token.get('roles', []).hasAny(['admin']))
       );
     }
     

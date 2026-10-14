@@ -18,7 +18,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { geohashForLocation } from 'geofire-common';
-import { db } from '@/firebaseConfig';
+import { auth, db } from '@/firebaseConfig';
 
 // In-memory cache for fast loading
 const restaurantCache = new Map<string, Restaurant>();
@@ -58,11 +58,37 @@ export type UpdateRestaurantData = Partial<Omit<Restaurant, 'id' | 'createdBy' |
  */
 export async function createRestaurant(data: CreateRestaurantData): Promise<string> {
   try {
-    // Clean undefined values and prepare document
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('User must be authenticated');
+    }
+    await currentUser.getIdToken(true);
+    if (data.createdBy !== currentUser.uid) {
+      throw new Error('Restaurant owner does not match the current user');
+    }
+
     const cleanData = removeUndefinedValues({
       ...data,
-      nameLower: data.name.toLowerCase(),
+      name: data.name || '',
+      nameLower: (data.name || '').toLowerCase(),
+      category: data.category || '',
+      tags: data.tags || [],
+      signatureDish: data.signatureDish || '',
+      description: data.description || '',
+      coverPhotoUrl: data.coverPhotoUrl || '',
+      photos: data.photos || [],
+      address: data.address || '',
+      city: data.city || '',
       geohash: data.location ? geohashForLocation([data.location.latitude, data.location.longitude], 10) : undefined,
+      phone: data.phone || '',
+      website: data.website || '',
+      openTime: data.openTime || '',
+      closeTime: data.closeTime || '',
+      openAllDays: data.openAllDays ?? false,
+      status: data.status || 'draft',
+      rating: data.rating ?? 0,
+      reviewCount: data.reviewCount ?? 0,
+      createdBy: currentUser.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -70,8 +96,10 @@ export async function createRestaurant(data: CreateRestaurantData): Promise<stri
     const docRef = await addDoc(collection(db, 'restaurants'), cleanData);
     return docRef.id;
   } catch (error) {
-    console.error('Error creating restaurant:', error);
-    throw new Error(`Failed to create restaurant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const code = getErrorCode(error);
+    const message = getErrorMessage(error);
+    console.error('Error creating restaurant:', { code, message, error });
+    throw error;
   }
 }
 
@@ -89,8 +117,10 @@ export async function updateRestaurant(id: string, data: UpdateRestaurantData): 
 
     await updateDoc(doc(db, 'restaurants', id), updateData);
   } catch (error) {
-    console.error('Error updating restaurant:', error);
-    throw new Error(`Failed to update restaurant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const code = getErrorCode(error);
+    const message = getErrorMessage(error);
+    console.error('Error updating restaurant:', { code, message, error });
+    throw error;
   }
 }
 
@@ -322,4 +352,14 @@ function removeUndefinedValues<T extends Record<string, any>>(obj: T): Partial<T
   }
   
   return cleaned;
+}
+
+function getErrorCode(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : 'unknown';
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

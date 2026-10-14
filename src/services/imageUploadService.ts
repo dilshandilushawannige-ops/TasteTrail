@@ -58,8 +58,7 @@ async function processImage(
     return manipulatedImage.uri;
   } catch (error) {
     console.error('Error processing image:', error);
-    // Return original URI if processing fails
-    return uri;
+    throw error;
   }
 }
 
@@ -120,6 +119,10 @@ export async function uploadImageToCloudinary(
         if (xhr.status === 200) {
           try {
             const response = JSON.parse(xhr.responseText);
+            if (!response.secure_url) {
+              reject(new Error(response.error?.message || 'Cloudinary did not return an image URL'));
+              return;
+            }
             resolve({
               url: response.secure_url,
               publicId: response.public_id,
@@ -146,8 +149,16 @@ export async function uploadImageToCloudinary(
     });
 
   } catch (error) {
-    console.error('Error uploading image to Cloudinary:', error);
-    throw new Error(`Image upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const code = getErrorCode(error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error uploading image to Cloudinary:', { code, message, error });
+    throw error;
+  }
+
+  function getErrorCode(error: unknown): string {
+    return typeof error === 'object' && error !== null && 'code' in error
+      ? String(error.code)
+      : 'unknown';
   }
 }
 
